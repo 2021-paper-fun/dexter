@@ -1,28 +1,36 @@
-from kinematics.main import *
+from kinematics.ik import solve_ik
+from kinematics.fk import solve_fk
+from math import *
 import time
 
 
 def test_system(lengths, constraints):
     target = constraints[:3]
 
-    angles = IK.solve(lengths, constraints)
-    print('Number of solutions: {}.'.format(len(angles)))
+    try:
+        angles = solve_ik(lengths, constraints)
+        for angle in angles:
+            print(angle)
+    except (ValueError, ZeroDivisionError):
+        angles = []
 
     if len(angles) > 0:
         for angle in angles:
-            points = FK.solve(lengths, angle)
+            points = solve_fk(lengths, angle)
 
             if all(round(points[-1][i], 5) == round(target[i], 5) for i in range(3)):
                 print('Test passed!')
             else:
                 print('Test failed!')
+                print(points[-1])
 
 
 def test_speed(lengths, constraints):
+    print(solve_ik(lengths, constraints))
     start = time.time()
-    for i in range(10000):
-        IK.solve(lengths, constraints)
+    for i in range(100000):
+        solve_ik(lengths, constraints)
     print((time.time() - start))
 
 
-test_speed((10, 10, 2, 5), [10, 2, -3, pi])
+test_system((10.0, 10.0, 2.0, 5.0), (-1.06, 2.16, 13.66, pi/2))

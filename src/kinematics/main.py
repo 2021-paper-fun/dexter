@@ -1,5 +1,5 @@
 from math import *
-from functools import lru_cache
+from numba import jit
 
 
 class FK:
@@ -44,7 +44,6 @@ class FK:
 
 class IK:
     @staticmethod
-    @lru_cache()
     def _n_1(t0, x, y):
         nx = sin(t0 - atan2(y, x))
         ny = cos(t0 - atan2(y, x))
@@ -53,7 +52,6 @@ class IK:
         return nx, ny, nz
 
     @staticmethod
-    @lru_cache()
     def _n_2(t0, x, y):
         nx = -sin(t0 + atan2(y, x))
         ny = cos(t0 + atan2(y, x))
@@ -62,7 +60,6 @@ class IK:
         return nx, ny, nz
 
     @staticmethod
-    @lru_cache()
     def _d_1(l4, phi, t0, x, y, z):
         dx = -l4 * sin(phi) * cos(t0 - atan2(y, x)) + x
         dy = l4 * sin(phi) * sin(t0 - atan2(y, x)) + y
@@ -71,7 +68,6 @@ class IK:
         return dx, dy, dz
 
     @staticmethod
-    @lru_cache()
     def _d_2(l4, phi, t0, x, y, z):
         dx = -l4 * sin(phi) * cos(t0 + atan2(y, x)) + x
         dy = -l4 * sin(phi) * sin(t0 + atan2(y, x)) + y
@@ -80,7 +76,6 @@ class IK:
         return dx, dy, dz
 
     @staticmethod
-    @lru_cache()
     def _c_1(d, l3, t0, x, y):
         cx = d[0] - l3 * sin(t0 - atan2(y, x))
         cy = d[1] - l3 * cos(t0 - atan2(y, x))
@@ -89,7 +84,6 @@ class IK:
         return cx, cy, cz
 
     @staticmethod
-    @lru_cache()
     def _c_2(d, l3, t0, x, y):
         cx = d[0] - l3 * sin(t0 + atan2(y, x))
         cy = d[1] + l3 * cos(t0 + atan2(y, x))
@@ -98,36 +92,30 @@ class IK:
         return cx, cy, cz
 
     @staticmethod
-    @lru_cache()
     def _t3_1(c, l1, l2):
         return -acos(-(c[0] ** 2 + c[1] ** 2 + c[2] ** 2 - l1 ** 2 - l2 ** 2) / (2 * l1 * l2)) + pi
 
-    @classmethod
-    @lru_cache()
-    def _t3_2(cls, c, l1, l2):
-        return -cls._t3_1(c, l1, l2)
+    @staticmethod
+    def _t3_2(c, l1, l2):
+        return -IK._t3_1(c, l1, l2)
 
     @staticmethod
-    @lru_cache()
     def _t2_1(c, l1, l2, t3):
         return -2 * atan(2 * (l2 * sin(t3) - sqrt(
             -c[2] ** 2 + l1 ** 2 + 2 * l1 * l2 * cos(t3) + l2 ** 2)) * cos(
             t3 / 2) ** 2 / ((cos(t3) + 1) * (c[2] + l1 - 2 * l2 * sin(t3 / 2) ** 2 + l2)))
 
     @staticmethod
-    @lru_cache()
     def _t2_2(c, l1, l2, t3):
         return -2 * atan(2 * (l2 * sin(t3) + sqrt(
             -c[2] ** 2 + l1 ** 2 + 2 * l1 * l2 * cos(t3) + l2 ** 2)) * cos(
             t3 / 2) ** 2 / ((cos(t3) + 1) * (c[2] + l1 - 2 * l2 * sin(t3 / 2) ** 2 + l2)))
 
     @staticmethod
-    @lru_cache()
     def _t1_1(c):
         return atan2(c[1], c[0])
 
     @classmethod
-    @lru_cache()
     def _t1_2(cls, c):
         return cls._t1_1(c) + pi
 
@@ -160,30 +148,24 @@ class IK:
     def norm(a):
         return (a[0] ** 2 + a[1] ** 2 + a[2] ** 2) ** 0.5
 
-    @classmethod
-    @lru_cache()
-    def _t4_1(cls, c, d, l1, n, t1, t2, x, y, z):
+    @staticmethod
+    def _t4_1(c, d, l1, n, t1, t2, x, y, z):
         x1 = l1 * sin(t2) * cos(t1)
         y1 = l1 * sin(t1) * sin(t2)
         z1 = l1 * cos(t2)
         p1 = (x1, y1, z1)
 
-        bc = cls.vector(p1, c)
-        de = cls.vector(d, (x, y, z))
-        s = cls.sign(cls.dot(n, cls.cross(bc, de)))
+        bc = IK.vector(p1, c)
+        de = IK.vector(d, (x, y, z))
+        s = IK.sign(IK.dot(n, IK.cross(bc, de)))
 
-        return s * acos(cls.dot(bc, de) / (cls.norm(bc) * cls.norm(de)))
 
-    @classmethod
-    @lru_cache()
-    def _t4_2(cls, c, d, l1, n, t1, t2, x, y, z):
-        return 2 * pi - cls._t4_1(c, d, l1, n, t1, t2, x, y, z)
+    @staticmethod
+    def _t4_2(c, d, l1, n, t1, t2, x, y, z):
+        return 2 * pi - IK._t4_1(c, d, l1, n, t1, t2, x, y, z)
 
-    @classmethod
-    def solve(cls, lengths, constraints):
-        # Create data dictionary
-        data = {}
-
+    @staticmethod
+    def solve(lengths, constraints):
         # Fill dictionary
         l1, l2, l3, l4 = lengths
         x, y, z, phi = constraints
@@ -193,10 +175,10 @@ class IK:
 
         # Define paths
         paths = (
-            (cls._n_1, cls._d_1, cls._c_1, cls._t3_1, cls._t2_1, cls._t1_1, cls._t4_1),
-            (cls._n_1, cls._d_1, cls._c_1, cls._t3_2, cls._t2_1, cls._t1_1, cls._t4_1),
-            (cls._n_2, cls._d_2, cls._c_2, cls._t3_1, cls._t2_2, cls._t1_2, cls._t4_2),
-            (cls._n_2, cls._d_2, cls._c_2, cls._t3_2, cls._t2_2, cls._t1_2, cls._t4_2)
+            (IK._n_1, IK._d_1, IK._c_1, IK._t3_1, IK._t2_1, IK._t1_1, IK._t4_1),
+            (IK._n_1, IK._d_1, IK._c_1, IK._t3_2, IK._t2_1, IK._t1_1, IK._t4_1),
+            (IK._n_2, IK._d_2, IK._c_2, IK._t3_1, IK._t2_2, IK._t1_2, IK._t4_2),
+            (IK._n_2, IK._d_2, IK._c_2, IK._t3_2, IK._t2_2, IK._t1_2, IK._t4_2)
         )
 
         # Compute theta0
@@ -219,3 +201,4 @@ class IK:
                 pass
 
         return solutions
+
