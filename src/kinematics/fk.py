@@ -2,7 +2,7 @@ from math import *
 from numba import jit
 
 
-@jit
+@jit(nopython=True)
 def solve_fk(lengths, angles):
     l1, l2, l3, l4 = lengths
     t1, t2, t3, t4 = angles

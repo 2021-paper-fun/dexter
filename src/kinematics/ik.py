@@ -24,10 +24,12 @@ def vector(a, b):
 
 @jit(nopython=True)
 def sign(a):
-    if a < 0:
+    if a > 0:
+        return 1
+    elif a < 0:
         return -1
     else:
-        return 1
+        return 0
 
 
 @jit(nopython=True)
