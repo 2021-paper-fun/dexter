@@ -159,6 +159,7 @@ class IK:
         de = IK.vector(d, (x, y, z))
         s = IK.sign(IK.dot(n, IK.cross(bc, de)))
 
+        return s * acos(IK .dot(bc, de) / (IK.norm(bc) * IK.norm(de)))
 
     @staticmethod
     def _t4_2(c, d, l1, n, t1, t2, x, y, z):
@@ -202,3 +203,14 @@ class IK:
 
         return solutions
 
+
+print(FK.solve((10.0, 10.0, 2.0, 5.0), (0, 0, 0, 0)))
+print(FK.solve((10.0, 10.0, 2.0, 5.0), (pi / 2, 0, 0, 0)))
+print(FK.solve((10.0, 10.0, 2.0, 5.0), (0, pi / 2, 0, 0)))
+print(FK.solve((10.0, 10.0, 2.0, 5.0), (0, 0, pi / 2, 0)))
+print(FK.solve((10.0, 10.0, 2.0, 5.0), (0, 0, 0, pi / 2)))
+print(FK.solve((10.0, 10.0, 2.0, 5.0), (0.3, 0.2, -0.1, 0.5)))
+print(FK.solve((10.0, 10.0, 2.0, 5.0), (-pi, pi / 15, 7.2, -1.2)))
+print(FK.solve((9.0, 11.0, -2.0, 5.0), (6.2, pi / 2, - pi / 3, 0)))
+print(FK.solve((9.0, 9.0, -2.0, 3.0), (2.1, -2.4, 0, 0)))
+print(FK.solve((2.0, 6.0, -2.0, 4.0), (-6.7, -2.4, -pi / 7, -pi / 2)))

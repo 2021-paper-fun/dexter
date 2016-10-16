@@ -22,7 +22,6 @@ def test_system(lengths, constraints):
                 print('Test passed!')
             else:
                 print('Test failed!')
-                print(points[-1])
 
 
 def test_speed(lengths, constraints):
@@ -32,5 +31,7 @@ def test_speed(lengths, constraints):
         solve_ik(lengths, constraints)
     print((time.time() - start))
 
-
+#
 test_system((10.0, 10.0, 2.0, 5.0), (-1.06, 2.16, 13.66, pi/2))
+test_system((10.0, 10.0, 2.0, 5.0), (0, 15, 2, pi))
+test_system((10.0, 10.0, 2.0, 5.0), (4, 3, 2, -1.3))

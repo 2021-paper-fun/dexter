@@ -24,12 +24,10 @@ def vector(a, b):
 
 @jit(nopython=True)
 def sign(a):
-    if a > 0:
-        return 1
-    elif a < 0:
+    if a < 0:
         return -1
     else:
-        return 0
+        return 1
 
 
 @jit(nopython=True)
@@ -101,18 +99,18 @@ def solve_ik(lengths, constraints, epsilon=sys.float_info.epsilon):
     t3_4 = -t3_3
 
     # Compute hand-wavy t2
-    k_1 = sign(cx_1 ** 2 + cy_1 ** 2 - (l2 * sin(t3_1)) ** 2)
-    k_2 = sign(cx_1 ** 2 + cy_1 ** 2 - (l2 * sin(t3_2)) ** 2)
-    k_3 = sign(cx_2 ** 2 + cy_2 ** 2 - (l2 * sin(t3_3)) ** 2)
-    k_4 = sign(cx_2 ** 2 + cy_2 ** 2 - (l2 * sin(t3_4)) ** 2)
+    if sin(phi) > 0 and x ** 2 + y ** 2 < l3 ** 2 + (sin(phi) * l4) ** 2:
+        k = -1
+    else:
+        k = 1
 
-    t2_1 = -2 * atan(2 * (l2 * sin(t3_1) - k_1 * (-dz_1 ** 2 + l1 ** 2 + 2 * l1 * l2 * cos(t3_1) + l2 ** 2) ** 0.5)
+    t2_1 = -2 * atan(2 * (l2 * sin(t3_1) - k * (-dz_1 ** 2 + l1 ** 2 + 2 * l1 * l2 * cos(t3_1) + l2 ** 2) ** 0.5)
                      * cos(t3_1 / 2) ** 2 / ((cos(t3_1) + 1) * (dz_1 + l1 - 2 * l2 * sin(t3_1 / 2) ** 2 + l2)))
-    t2_2 = -2 * atan(2 * (l2 * sin(t3_2) - k_2 * (-dz_1 ** 2 + l1 ** 2 + 2 * l1 * l2 * cos(t3_2) + l2 ** 2) ** 0.5)
+    t2_2 = -2 * atan(2 * (l2 * sin(t3_2) - k * (-dz_1 ** 2 + l1 ** 2 + 2 * l1 * l2 * cos(t3_2) + l2 ** 2) ** 0.5)
                      * cos(t3_2 / 2) ** 2 / ((cos(t3_2) + 1) * (dz_1 + l1 - 2 * l2 * sin(t3_2 / 2) ** 2 + l2)))
-    t2_3 = -2 * atan(2 * (l2 * sin(t3_3) + k_3 * (-dz_2 ** 2 + l1 ** 2 + 2 * l1 * l2 * cos(t3_3) + l2 ** 2) ** 0.5)
+    t2_3 = -2 * atan(2 * (l2 * sin(t3_3) + k * (-dz_2 ** 2 + l1 ** 2 + 2 * l1 * l2 * cos(t3_3) + l2 ** 2) ** 0.5)
                      * cos(t3_3 / 2) ** 2 / ((cos(t3_3) + 1) * (dz_2 + l1 - 2 * l2 * sin(t3_3 / 2) ** 2 + l2)))
-    t2_4 = -2 * atan(2 * (l2 * sin(t3_4) + k_4 * (-dz_2 ** 2 + l1 ** 2 + 2 * l1 * l2 * cos(t3_4) + l2 ** 2) ** 0.5)
+    t2_4 = -2 * atan(2 * (l2 * sin(t3_4) + k * (-dz_2 ** 2 + l1 ** 2 + 2 * l1 * l2 * cos(t3_4) + l2 ** 2) ** 0.5)
                      * cos(t3_4 / 2) ** 2 / ((cos(t3_4) + 1) * (dz_2 + l1 - 2 * l2 * sin(t3_4 / 2) ** 2 + l2)))
 
     # Compute t1
@@ -129,6 +127,6 @@ def solve_ik(lengths, constraints, epsilon=sys.float_info.epsilon):
 
     # Return
     return (t1_1, t2_1, t3_1, t4_1), \
-           (t1_2, t2_2, t3_2, t4_2), \
+           (t1_1, t2_2, t3_2, t4_2), \
            (t1_3, t2_3, t3_3, t4_3), \
            (t1_4, t2_4, t3_4, t4_4)
