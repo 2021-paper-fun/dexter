@@ -90,3 +90,10 @@ ENV/
 
 # PyCharm
 .idea
+
+# Images
+.png
+.jpg
+.svg
+.gif
+.bmp
