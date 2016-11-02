@@ -13,10 +13,7 @@ class Maestro:
     """
     Implementation of the controller for Pololu Mini Maestro Controller.
     This class communicates with only one maestro on the virtual command port.
-
-    This implementation is thread-safe.
-    However, a servo can only belong to at most one thread.
-    Having a servo in multiple threads will cause errors.
+    This implementation is not thread-safe.
     """
 
     def __init__(self, port=None, baud=115200):
@@ -88,45 +85,6 @@ class Maestro:
         :return: (lsb, msb)
         """
         return value & 0x7F, (value >> 7) & 0x7F
-
-    ############################################
-    # Begin implementation of digital protocol.
-    ############################################
-
-    def rotate(self, stepper, degrees, t):
-        """
-        Send some pulses in a given time with equal spacing per pulse.
-        Blocking until completion.
-        :param stepper: Stepper object.
-        :param degrees: The number of degrees to turn.
-        :param t: The total time.
-        """
-
-        steps = stepper.deg_to_steps(degrees)
-
-        if steps == 0:
-            return
-
-        if steps > 0:
-            direction = 1
-            self.usb.write((0x84, stepper.c1, 64, 62))
-        else:
-            direction = -1
-            self.usb.write((0x84, stepper.c1, 104, 7))
-
-        steps = abs(steps)
-
-        x = t / (2 * steps) / 1000
-        low_pulse = (0x84, stepper.c2, 104, 7)
-        high_pulse = (0x84, stepper.c2, 64, 62)
-
-        for i in range(steps):
-            self.usb.write(high_pulse)
-            time.sleep(x)
-            self.usb.write(low_pulse)
-            time.sleep(x)
-
-            stepper.step_one(direction)
 
     ##########################################################
     # Begin implementation of buffer-capable compact protocol.
@@ -318,7 +276,7 @@ class Maestro:
         """
         Set the PWM.
         :param time: The time parameter as specified by the documentation.
-        :param period: THe period parameter as specified by the documentation.
+        :param period: The period parameter as specified by the documentation.
         """
 
         # Use endian format suitable for Maestro.
@@ -335,6 +293,7 @@ class Maestro:
         """
         Return all servos to their home positions.
         """
+
         # Send command.
         self.usb.write((0xA2,))
 

@@ -92,8 +92,11 @@ ENV/
 .idea
 
 # Images
-.png
-.jpg
-.svg
-.gif
-.bmp
+*.png
+*.jpg
+*.svg
+*.gif
+*.bmp
+
+# Executables
+*.exe

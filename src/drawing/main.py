@@ -1,0 +1,508 @@
+import numpy as np
+import re
+import math
+import copy
+import inspect
+import sys
+import os
+import logging
+import matplotlib.pyplot as plt
+from drawing.path import *
+import xml.etree.ElementTree as etree
+
+logger = logging.getLogger('universe')
+
+COMMAND_RE = re.compile('([MmZzLlHhVvCcSsQqTtAa])')
+FLOAT_RE = re.compile('[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?')
+UNIT_RE = re.compile('em|ex|px|in|cm|mm|pt|pc|%')
+
+svg_transforms = ['matrix', 'translate', 'scale', 'rotate', 'skewX', 'skewY']
+TRANSFORMS_RE = re.compile('|'.join([x + '[^)]*\)' for x in svg_transforms]))
+
+svg_ns = '{http://www.w3.org/2000/svg}'
+
+unit_convert = {
+    None: 1,           # Default unit (same as pixel)
+    'px': 1,           # px: pixel. Default SVG unit
+    'em': 10,          # 1 em = 10 px FIXME
+    'ex': 5,           # 1 ex =  5 px FIXME
+    'in': 96,          # 1 in = 96 px
+    'cm': 96 / 2.54,   # 1 cm = 1/2.54 in
+    'mm': 96 / 25.4,   # 1 mm = 1/25.4 in
+    'pt': 96 / 72.0,   # 1 pt = 1/72 in
+    'pc': 96 / 6.0,    # 1 pc = 1/6 in
+    '%' :  1 / 100.0   # 1 percent
+}
+
+
+class Matrix:
+    def __init__(self, mat=(1, 0, 0, 1, 0, 0)):
+        if len(mat) != 6:
+            raise ValueError('Bad matrix size {}.'.format(len(mat)))
+
+        self.mat = mat
+
+    def __matmul__(self, other):
+        if isinstance(other, Matrix):
+            a = self.mat[0] * other.mat[0] + self.mat[2] * other.mat[1]
+            b = self.mat[1] * other.mat[0] + self.mat[3] * other.mat[1]
+            c = self.mat[0] * other.mat[2] + self.mat[2] * other.mat[3]
+            d = self.mat[1] * other.mat[2] + self.mat[3] * other.mat[3]
+            e = self.mat[0] * other.mat[4] + self.mat[2] * other.mat[5] + self.mat[4]
+            f = self.mat[1] * other.mat[4] + self.mat[3] * other.mat[5] + self.mat[5]
+            return Matrix((a, b, c, d, e, f))
+
+        elif isinstance(other, complex):
+            x = other.real * self.mat[0] + other.imag * self.mat[2] + self.mat[4]
+            y = other.real * self.mat[1] + other.imag * self.mat[3] + self.mat[5]
+            return complex(x, y)
+
+        else:
+            return NotImplemented
+
+    def __str__(self):
+        return str(self.mat)
+
+    def __getitem__(self, item):
+        return self.mat[item]
+
+
+class Transformable:
+    def __init__(self, elt=None):
+        self.items = []
+        self.matrix = Matrix()
+        self.viewport = complex(800, 600)
+
+        # ID.
+        self.id = hex(id(self))
+
+        if elt is not None:
+            self._get_transformations(elt)
+
+    def _get_transformations(self, elt):
+        t = elt.get('transform')
+
+        if t is None:
+            return
+
+        transforms = TRANSFORMS_RE.findall(t)
+
+        for t in transforms:
+            op, args = t.split('(')
+            op = op.strip()
+            
+            # Keep only numbers.
+            args = [float(x) for x in FLOAT_RE.findall(args)]
+
+            if op == 'matrix':
+                self.matrix @= Matrix(args)
+
+            if op == 'translate':
+                tx = args[0]
+
+                if len(args) == 1:
+                    ty = 0
+                else:
+                    ty = args[1]
+
+                self.matrix @= Matrix((1, 0, 0, 1, tx, ty))
+
+            if op == 'scale':
+                sx = args[0]
+
+                if len(args) == 1:
+                    sy = sx
+                else:
+                    sy = args[1]
+
+                self.matrix @= Matrix((sx, 0, 0, sy, 0, 0))
+
+            if op == 'rotate':
+                cosa = math.cos(math.radians(args[0]))
+                sina = math.sin(math.radians(args[0]))
+
+                if len(args) != 1:
+                    tx, ty = args[1:3]
+                    self.matrix @= Matrix((1, 0, 0, 1, tx, ty))
+                    self.matrix @= Matrix((cosa, sina, -sina, cosa, 0, 0))
+                    self.matrix @= Matrix((1, 0, 0, 1, -tx, -ty))
+                else:
+                    self.matrix @= Matrix((cosa, sina, -sina, cosa, 0, 0))
+
+            if op == 'skewX':
+                tana = math.tan(math.radians(args[0]))
+                self.matrix @= Matrix([1, 0, tana, 1, 0, 0])
+
+            if op == 'skewY':
+                tana = math.tan(math.radians(args[0]))
+                self.matrix @= Matrix([1, tana, 0, 1, 0, 0])
+
+    def _length(self, v, mode=None):
+        # Handle empty (non-existing) length element.
+        if v is None:
+            return 0
+
+        # Get length value.
+        m = FLOAT_RE.search(v)
+        if m:
+            value = float(m.group(0))
+        else:
+            raise TypeError(v + ' is not a valid length.')
+
+        # Get length unit.
+        m = UNIT_RE.search(v)
+        if m:
+            unit = m.group(0)
+        else:
+            unit = None
+
+        if unit == '%':
+            if mode == 'x':
+                return value * unit_convert[unit] * self.viewport.imag
+            if mode == 'y':
+                return value * unit_convert[unit] * self.viewport.real
+
+        return value * unit_convert[unit]
+
+    def _lengths(self, x, y):
+        return self._length(x, 'x'), self._length(y, 'y')
+
+    def transform(self, matrix=None):
+        for x in self.items:
+            x.transform(matrix)
+
+    def flatten(self):
+        i = 0
+        flat = copy.deepcopy(self.items)
+
+        while i < len(flat):
+            while isinstance(flat[i], Group):
+                flat[i:i+1] = flat[i].items
+            i += 1
+
+        return flat
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, item):
+        return self.items[item]
+
+
+class Svg(Transformable):
+    def __init__(self, filename=None):
+        super().__init__()
+
+        self.filename = None
+        self.root = None
+
+        if filename:
+            self.parse(filename)
+
+    def parse(self, filename):
+        self.filename = filename
+
+        tree = etree.parse(filename)
+        self.root = tree.getroot()
+
+        if self.root.tag != svg_ns + 'svg':
+            raise TypeError('File {} does not seem to be a valid SVG file.'.format(filename))
+
+        # Create a base Group to group all other items (useful for viewBox elt).
+        base_group = BaseGroup()
+        self.items.append(base_group)
+
+        # SVG dimensions.
+        width, height = self._lengths(self.root.get('width'), self.root.get('height'))
+
+        # Update viewport.
+        base_group.viewport = complex(width, height)
+
+        # Get matrix.
+        if self.root.get('viewBox') is not None:
+            view_box = FLOAT_RE.findall(self.root.get('viewBox'))
+            sx = width / float(view_box[2])
+            sy = height / float(view_box[3])
+            tx = -float(view_box[0])
+            ty = -float(view_box[1])
+            base_group.matrix = Matrix((sx, 0, 0, sy, tx, ty))
+
+        # Parse XML elements hierarchically with groups.
+        base_group.append(self.root)
+
+        self.transform()
+
+    def title(self):
+        t = self.root.find(svg_ns + 'title')
+
+        if t is not None:
+            return t
+        else:
+            return os.path.splitext(os.path.basename(self.filename))[0]
+
+
+class Group(Transformable):
+    tag = 'g'
+
+    def __init__(self, elt=None):
+        super().__init__(elt)
+
+    def append(self, element):
+        for elt in element:
+            elt_class = svg_classes.get(elt.tag, None)
+
+            if elt_class is None:
+                logger.warning('No handler for element {}.'.format(elt.tag))
+                continue
+
+            # Instantiate elt associated class.
+            item = elt_class(elt)
+
+            # Apply group matrix to the newly created object.
+            item.matrix = self.matrix @ item.matrix
+            item.viewport = self.viewport
+
+            # Recursively append if elt is a group.
+            if elt.tag == svg_ns + 'g':
+                item.append(elt)
+
+            # Ensure that group has valid elements.
+            if len(item.items) > 0:
+                self.items.append(item)
+
+    def __repr__(self):
+        return '<Group ' + self.id + '>: ' + repr(self.items)
+
+
+class BaseGroup(Group):
+    def __init__(self):
+        super().__init__()
+
+    def __repr__(self):
+        return '<BaseGroup ' + self.id + '>: ' + repr(self.items)
+
+
+class Path(Transformable):
+    tag = 'path'
+
+    COMMANDS = set('MmZzLlHhVvCcSsQqTtAa')
+    UPPERCASE = set('MZLHVCSQTA')
+
+    def __init__(self, elt=None):
+        super().__init__(elt)
+
+        if elt is not None:
+            self.style = elt.get('style')
+            self._parse(elt.get('d'))
+
+    def _tokenize_path(self, pathdef):
+        for x in COMMAND_RE.split(pathdef):
+            if x in self.COMMANDS:
+                yield x
+            for token in FLOAT_RE.findall(x):
+                yield token
+
+    def _parse(self, pathdef):
+        current_pos = 0j
+
+        elements = list(self._tokenize_path(pathdef))
+        elements.reverse()
+
+        start_pos = None
+        command = None
+
+        while elements:
+            if elements[-1] in self.COMMANDS:
+                # New command.
+                last_command = command  # Used by S and T
+                command = elements.pop()
+                absolute = command in self.UPPERCASE
+                command = command.upper()
+            else:
+                # If this element starts with numbers, it is an implicit command
+                # and we don't change the command. Check that it's allowed:
+                if command is None:
+                    raise ValueError('Disallowed implicit command in %s, position %s.' %
+                                     (pathdef, len(pathdef.split()) - len(elements)))
+
+            if command == 'M':
+                # Moveto command.
+                x = elements.pop()
+                y = elements.pop()
+                pos = float(x) + float(y) * 1j
+                if absolute:
+                    current_pos = pos
+                else:
+                    current_pos += pos
+
+                # when M is called, reset start_pos
+                # This behavior of Z is defined in svg spec:
+                # http://www.w3.org/TR/SVG/paths.html#PathDataClosePathCommand
+                start_pos = current_pos
+
+                # Implicit moveto commands are treated as lineto commands.
+                # So we set command to lineto here, in case there are
+                # further implicit commands after this moveto.
+                command = 'L'
+
+            elif command == 'Z':
+                # Close path
+                if not (current_pos == start_pos):
+                    self.items.append(Line(current_pos, start_pos))
+                current_pos = start_pos
+                start_pos = None
+                command = None  # You can't have implicit commands after closing.
+
+            elif command == 'L':
+                x = elements.pop()
+                y = elements.pop()
+                pos = float(x) + float(y) * 1j
+                if not absolute:
+                    pos += current_pos
+                self.items.append(Line(current_pos, pos))
+                current_pos = pos
+
+            elif command == 'H':
+                x = elements.pop()
+                pos = float(x) + current_pos.imag * 1j
+                if not absolute:
+                    pos += current_pos.real
+                self.items.append(Line(current_pos, pos))
+                current_pos = pos
+
+            elif command == 'V':
+                y = elements.pop()
+                pos = current_pos.real + float(y) * 1j
+                if not absolute:
+                    pos += current_pos.imag * 1j
+                self.items.append(Line(current_pos, pos))
+                current_pos = pos
+
+            elif command == 'C':
+                control1 = float(elements.pop()) + float(elements.pop()) * 1j
+                control2 = float(elements.pop()) + float(elements.pop()) * 1j
+                end = float(elements.pop()) + float(elements.pop()) * 1j
+
+                if not absolute:
+                    control1 += current_pos
+                    control2 += current_pos
+                    end += current_pos
+
+                self.items.append(CubicBezier(current_pos, control1, control2, end))
+                current_pos = end
+
+            elif command == 'S':
+                # Smooth curve. First control point is the "reflection" of
+                # the second control point in the previous path.
+
+                if last_command not in 'CS':
+                    # If there is no previous command or if the previous command
+                    # was not an C, c, S or s, assume the first control point is
+                    # coincident with the current point.
+                    control1 = current_pos
+                else:
+                    # The first control point is assumed to be the reflection of
+                    # the second control point on the previous command relative
+                    # to the current point.
+                    control1 = current_pos + current_pos - self.items[-1].control2
+
+                control2 = float(elements.pop()) + float(elements.pop()) * 1j
+                end = float(elements.pop()) + float(elements.pop()) * 1j
+
+                if not absolute:
+                    control2 += current_pos
+                    end += current_pos
+
+                self.items.append(CubicBezier(current_pos, control1, control2, end))
+                current_pos = end
+
+            elif command == 'Q':
+                control = float(elements.pop()) + float(elements.pop()) * 1j
+                end = float(elements.pop()) + float(elements.pop()) * 1j
+
+                if not absolute:
+                    control += current_pos
+                    end += current_pos
+
+                self.items.append(QuadraticBezier(current_pos, control, end))
+                current_pos = end
+
+            elif command == 'T':
+                # Smooth curve. Control point is the "reflection" of
+                # the second control point in the previous path.
+
+                if last_command not in 'QT':
+                    # If there is no previous command or if the previous command
+                    # was not an Q, q, T or t, assume the first control point is
+                    # coincident with the current point.
+                    control = current_pos
+                else:
+                    # The control point is assumed to be the reflection of
+                    # the control point on the previous command relative
+                    # to the current point.
+                    control = current_pos + current_pos - self.items[-1].control
+
+                end = float(elements.pop()) + float(elements.pop()) * 1j
+
+                if not absolute:
+                    end += current_pos
+
+                self.items.append(QuadraticBezier(current_pos, control, end))
+                current_pos = end
+
+            elif command == 'A':
+                radius = float(elements.pop()) + float(elements.pop()) * 1j
+                rotation = float(elements.pop())
+                arc = bool(float(elements.pop()))
+                sweep = bool(float(elements.pop()))
+                end = float(elements.pop()) + float(elements.pop()) * 1j
+
+                if not absolute:
+                    end += current_pos
+
+                self.items.append(Arc(current_pos, radius, rotation, arc, sweep, end))
+                current_pos = end
+
+    def length_info(self, error=LENGTH_ERROR, min_depth=LENGTH_MIN_DEPTH):
+        lengths = [each.length(error=error, min_depth=min_depth) for each in
+                   self.items]
+        total_length = sum(lengths)
+
+        return total_length, lengths
+
+    def transform(self, matrix=None):
+        if matrix is None:
+            matrix = self.matrix
+
+        for item in self.items:
+            item.transform(matrix)
+
+    def __str__(self):
+        return '\n'.join(str(x) for x in self.items)
+
+    def __repr__(self):
+        return '<Path ' + self.id + '>'
+
+
+svg_classes = {}
+
+for name, cls in inspect.getmembers(sys.modules[__name__], inspect.isclass):
+    tag = getattr(cls, 'tag', None)
+    if tag:
+        svg_classes[svg_ns + tag] = cls
+
+svg = Svg('trace.svg')
+paths = svg[0][0]
+
+for path in paths:
+    for segment in path:
+        t = np.linspace(0, 1, 20)
+        points = segment.point(t)
+        points = [(x.real, x.imag) for x in points]
+        points = list(zip(*points))
+        plt.plot(points[0], points[1])
+
+plt.axis('equal')
+plt.show()
+
+

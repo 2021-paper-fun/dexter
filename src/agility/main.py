@@ -47,7 +47,7 @@ class Servo:
         self.max_qus = max_pwm * 4
         self.max_vel = max_vel
 
-        self.bias = bias
+        self.bias = math.radians(bias)
         self.direction = direction
 
         # Dynamic current data.
@@ -72,20 +72,20 @@ class Servo:
 
         self.target = self.rad_to_qus(0)
 
-    def set_target(self, deg):
+    def set_target(self, rad):
         """
         Set the target for the servo.
-        :param deg: The input degrees.
+        :param rad: The input radians.
         """
 
-        deg = self.normalize(deg)
-        self.target = self.rad_to_qus(deg)
+        rad = self.normalize(rad)
+        self.target = self.rad_to_qus(rad)
 
     def normalize(self, rad):
         """
         Normalize a radian for the servo, taking into account direction and bias.
-        :param rad: Input degrees.
-        :return: Output degrees.
+        :param rad: Input radians.
+        :return: Output radians.
         """
 
         # Account for direction and bias.
@@ -105,7 +105,7 @@ class Servo:
     def get_position(self):
         """
         Get the servo's current position in radians.
-        :return: Output degrees.
+        :return: Output radians.
         """
 
         rad = self.qus_to_rad(self.pwm)
@@ -131,9 +131,9 @@ class Servo:
 
     def qus_to_rad(self, pwm):
         """
-        Converts 0.25 us to degrees.
+        Converts 0.25 us to radians.
         :param pwm: The input PWM in units of 0.25 us.
-        :return: Degrees.
+        :return: Radians.
         """
 
         return self.min_rad + self.k_qus2ang * (pwm - self.min_qus)

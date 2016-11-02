@@ -8,7 +8,7 @@ from mpl_toolkits.mplot3d import Axes3D
 def test_system(lengths, constraints):
     target = constraints[:3]
     angles = solve_ik(lengths, constraints)
-    print(angles)
+    # print(angles)
 
     for angle in angles:
         points = solve_fk(lengths, angle)
@@ -88,25 +88,11 @@ def graph(points, d):
     plt.show()
 
 
-lengths = (10.0, 10.0, 2.0, 5.0)
-phi = pi / 2
+lengths = (10.0, 10.0, 10.0, 5.0)
+phi = radians(135)
 
-test_system(lengths, (15, 0, 5, phi))
+# test_system(lengths, (15, 0, 5, phi))
 
 d = lengths[0] + lengths[1] + sin(phi) * lengths[3] - 1
 points = generate_sphere(lengths, phi, d, 10000)
 graph(points, d)
-
-
-tests = [
-    ((10.0, 10.0, 2.0, 5.0), (3.0, 3.0, 10.0, pi / 2)),
-    ((10.0, 10.0, 2.0, 5.0), (10.0, 0.0, 0.0, pi / 2)),
-    ((10.0, 10.0, 2.0, 5.0), (0.0, 10.0, 0.0, pi / 2)),
-    ((10.0, 10.0, 2.0, 5.0), (3.0, 3.0, -10.0, pi)),
-    ((10.0, 10.0, -2.0, 5.0), (0.0, -2.0, 25.0, 0)),
-    ((10.0, 10.0, -2.0, 5.0), (7.0, 3.0, 2.0, pi / 2)),
-    ((10.0, 10.0, -2.0, 5.0), (-3.0, -9.0, -2.0, pi / 3)),
-    ((10.0, 10.0, -2.0, 5.0), (12.0, 0.0, 2.0, -pi / 2)),
-    ((10.0, 10.0, 0.0, 5.0), (4.0, 7.0, 5.0, pi / 6)),
-    ((10.0, 10.0, 0.0, 5.0), (3.0, 9.0, -1.0, -pi / 2))
-]
