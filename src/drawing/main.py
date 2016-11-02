@@ -15,6 +15,7 @@ logger = logging.getLogger('universe')
 COMMAND_RE = re.compile('([MmZzLlHhVvCcSsQqTtAa])')
 FLOAT_RE = re.compile('[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?')
 UNIT_RE = re.compile('em|ex|px|in|cm|mm|pt|pc|%')
+COORD_RE = re.compile('([+-]?\d+\.?\d+)\s*,\s*([+-]?\d+\.?\d+)')
 
 svg_transforms = ['matrix', 'translate', 'scale', 'rotate', 'skewX', 'skewY']
 TRANSFORMS_RE = re.compile('|'.join([x + '[^)]*\)' for x in svg_transforms]))
@@ -295,6 +296,10 @@ class Path(Transformable):
             self.style = elt.get('style')
             self._parse(elt.get('d'))
 
+    @staticmethod
+    def _stringify(x):
+        return ' '.join(x)
+
     def _tokenize_path(self, pathdef):
         for x in COMMAND_RE.split(pathdef):
             if x in self.COMMANDS:
@@ -484,6 +489,187 @@ class Path(Transformable):
         return '<Path ' + self.id + '>'
 
 
+class Polyline(Path):
+    tag = 'polyline'
+
+    def __init__(self, elt=None):
+        if elt is not None:
+            d = self._convert(elt)
+            elt.set('d', d)
+
+        super().__init__(elt)
+
+    def _convert(self, elt):
+        points = COORD_RE.findall(elt.get('points'))
+
+        if points[0] == points[-1]:
+            closed = True
+        else:
+            closed = False
+
+        d = ['M', *points.pop(0)]
+
+        for p in points:
+            d.extend(('L', *p))
+
+        if closed:
+            d.append('z')
+
+        return self._stringify(d)
+
+
+class Polygon(Path):
+    tag = 'polygon'
+
+    def __init__(self, elt=None):
+        if elt is not None:
+            d = self._convert(elt)
+            elt.set('d', d)
+
+        super().__init__(elt)
+
+    def _convert(self, elt):
+        points = COORD_RE.findall(elt.get('points'))
+
+        d = ['M', *points.pop(0)]
+
+        for p in points:
+            d.extend(('L', *p))
+
+        d.append('z')
+
+        return self._stringify(d)
+
+
+class Line(Path):
+    tag = 'line'
+
+    def __init__(self, elt=None):
+        if elt is not None:
+            d = self._convert(elt)
+            elt.set('d', d)
+
+        super().__init__(elt)
+
+    def _convert(self, elt):
+        x1, x2 = elt.get('x1'), elt.get('x2')
+        y1, y2 = elt.get('y1'), elt.get('y2')
+
+        d = ['M', x1, y1, 'L', x2, y2]
+
+        return self._stringify(d)
+
+
+class Ellipse(Path):
+    tag = 'ellipse'
+
+    def __init__(self, elt=None):
+        if elt is not None:
+            d = self._convert(elt)
+            elt.set('d', d)
+
+        super().__init__(elt)
+
+    def _convert(self, elt):
+        rx, ry = elt.get('rx'), elt.get('ry')
+        cx, cy = elt.get('cx'), elt.get('cy')
+
+        magic = 1.81
+
+        d = ['M', (cx - rx), cy,
+             'C', (cx - rx), (cy - ry / magic), (cx - rx / magic), (cy - ry), cx, (cy - ry),
+             'C', (cx + rx / magic), (cy - ry), (cx + rx), (cy - ry / magic), (cx + rx), cy,
+             'C', (cx + rx), (cy + ry / magic), (cx + rx / magic), (cy + ry), cx, (cy + ry),
+             'C', (cx - rx / magic), (cy + ry), (cx - rx), (cy + ry / magic), (cx - rx), cy,
+             'Z']
+
+        return self._stringify(d)
+
+
+class Circle(Ellipse):
+    tag = 'ellipse'
+
+    def __init__(self, elt=None):
+        if elt is not None:
+            r = elt.get('r')
+            elt.set('rx', r)
+            elt.set('ry', r)
+
+            d = self._convert(elt)
+            elt.set('d', d)
+
+        super().__init__(elt)
+
+
+class Rectangle(Path):
+    tag = 'rect'
+
+    def __init__(self, elt=None):
+        if elt is not None:
+            d = self._convert(elt)
+            elt.set('d', d)
+
+        super().__init__(elt)
+
+    @staticmethod
+    def _valid(x):
+        try:
+            if abs(float(x)) >= 0:
+                return True
+            else:
+                return False
+        except ValueError:
+            return False
+
+    def _convert(self, elt):
+        rx, ry = elt.get('rx'), elt.get('ry')
+        x, y = float(elt.get('x')), float(elt.get('y'))
+        w, h = float(elt.get('width')), float(elt.get('height'))
+
+        a, b = self._valid(rx), self._valid(ry)
+        if not a and not b:
+            rx = ry = 0
+        elif a and not b:
+            rx = float(rx)
+            ry = rx
+        elif not a and b:
+            ry = float(ry)
+            rx = ry
+        else:
+            rx = float(rx)
+            ry = float(ry)
+
+            if rx > w / 2:
+                rx = w / 2
+            if ry > h / 2:
+                ry = h / 2
+
+        if rx == 0 and ry == 0:
+            d = ['M', x, y,
+                 'L', x + w, y,
+                 'L', x + w, y + h,
+                 'L', x, y + h,
+                 'L', x, y,
+                 'Z']
+        else:
+            d = ['M', x + rx, y,
+                 'H', x + w - rx,
+                 'A', rx, ry, 0, 0, 1, x + w, y + ry,
+                 'V', y + h - ry,
+                 'A', rx, ry, 0, 0, 1, x + w - rx, y + h,
+                 'H', x + rx,
+                 'A', rx, ry, 0, 0, 1, x, y + h - ry,
+                 'V', y + ry,
+                 'A', rx, ry, 0, 0, 1, x + rx, y]
+
+        return self._stringify(d)
+
+
+class Drawing:
+    def __init__(self):
+        pass
+
+
 svg_classes = {}
 
 for name, cls in inspect.getmembers(sys.modules[__name__], inspect.isclass):
@@ -491,10 +677,12 @@ for name, cls in inspect.getmembers(sys.modules[__name__], inspect.isclass):
     if tag:
         svg_classes[svg_ns + tag] = cls
 
-svg = Svg('trace.svg')
-paths = svg[0][0]
+svg = Svg('test.svg')
+paths = svg[0]
 
 for path in paths:
+    print(path.length_info())
+
     for segment in path:
         t = np.linspace(0, 1, 20)
         points = segment.point(t)

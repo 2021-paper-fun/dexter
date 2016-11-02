@@ -1,6 +1,7 @@
 from math import sqrt, cos, sin, acos, degrees, radians, log, pi, atan2
 from cmath import exp
 from scipy.integrate import quad
+import numpy as np
 
 
 LENGTH_MIN_DEPTH = 5
@@ -10,7 +11,6 @@ USE_SCIPY_QUAD = True
 
 def segment_length(curve, start, end, start_point, end_point,
                    error=LENGTH_ERROR, min_depth=LENGTH_MIN_DEPTH, depth=0):
-    """Recursively approximates the length by straight lines"""
     mid = (start + end) / 2
     mid_point = curve.point(mid)
     length = abs(end_point - start_point)
@@ -25,7 +25,7 @@ def segment_length(curve, start, end, start_point, end_point,
                                error, min_depth, depth) +
                 segment_length(curve, mid, end, mid_point, end_point,
                                error, min_depth, depth))
-    # This is accurate enough.
+
     return length2
 
 
@@ -200,77 +200,7 @@ class CubicBezier:
 
 
 class Arc:
-    def __init__(self, start, radius, rotation, large_arc, sweep, end,
-                 autoscale_radius=True):
-        """
-        This should be thought of as a part of an ellipse connecting two
-        points on that ellipse, start and end.
-        Parameters
-        ----------
-        start : complex
-            The start point of the large_arc.
-        radius : complex
-            rx + 1j*ry, where rx and ry are the radii of the ellipse (also
-            known as its semi-major and semi-minor axes, or vice-versa or if
-            rx < ry).
-            Note: If rx = 0 or ry = 0 then this arc is treated as a
-            straight line segment joining the endpoints.
-            Note: If rx or ry has a negative sign, the sign is dropped; the
-            absolute value is used instead.
-            Note:  If no such ellipse exists, the radius will be scaled so
-            that one does (unless autoscale_radius is set to False).
-        rotation : float
-            This is the CCW angle (in degrees) from the positive x-axis of the
-            current coordinate system to the x-axis of the ellipse.
-        large_arc : bool
-            This is the large_arc flag.  Given two points on an ellipse,
-            there are two elliptical arcs connecting those points, the first
-            going the short way around the ellipse, and the second going the
-            long way around the ellipse.  If large_arc is 0, the shorter
-            elliptical large_arc will be used.  If large_arc is 1, then longer
-            elliptical will be used.
-            In other words, it should be 0 for arcs spanning less than or
-            equal to 180 degrees and 1 for arcs spanning greater than 180
-            degrees.
-        sweep : bool
-            This is the sweep flag.  For any acceptable parameters start, end,
-            rotation, and radius, there are two ellipses with the given major
-            and minor axes (radii) which connect start and end.  One which
-            connects them in a CCW fashion and one which connected them in a
-            CW fashion.  If sweep is 1, the CCW ellipse will be used.  If
-            sweep is 0, the CW ellipse will be used.
-
-        end : complex
-            The end point of the large_arc (must be distinct from start).
-
-        Note on CW and CCW: The notions of CW and CCW are reversed in some
-        sense when viewing SVGs (as the y coordinate starts at the top of the
-        image and increases towards the bottom).
-
-        Derived Parameters
-        ------------------
-        self._parameterize() sets self.center, self.theta and self.delta
-        for use in self.point() and other methods.  If
-        autoscale_radius == True, then this will also scale self.radius in the
-        case that no ellipse exists with the given parameters (see usage
-        below).
-
-        self.theta : float
-            This is the phase (in degrees) of self.u1transform(self.start).
-            It is $\theta_1$ in the official documentation and ranges from
-            -180 to 180.
-
-        self.delta : float
-            This is the angular distance (in degrees) between the start and
-            end of the arc after the arc has been sent to the unit circle
-            through self.u1transform().
-            It is $\Delta\theta$ in the official documentation and ranges from
-            -360 to 360; being positive when the arc travels CCW and negative
-            otherwise (i.e. is positive/negative when sweep == True/False).
-
-        self.center : complex
-            This is the center of the arc's ellipse.
-        """
+    def __init__(self, start, radius, rotation, large_arc, sweep, end):
 
         self.start = start
         self.radius = abs(radius.real) + 1j * abs(radius.imag)
@@ -278,11 +208,10 @@ class Arc:
         self.large_arc = large_arc
         self.sweep = sweep
         self.end = end
-        self.autoscale_radius = autoscale_radius
 
-        # Convenience parameters
-        self.phi = radians(self.rotation)
-        self.rot_matrix = exp(1j * self.phi)
+        # Convenience parameters.
+        self.phi = None
+        self.rot_matrix = None
 
         self.length_info = {'length': None, 'bpoints': None, 'error': None,
                              'min_depth': None}
@@ -297,126 +226,89 @@ class Arc:
                 "large_arc={}, sweep={}, end={})".format(*params))
 
     def _parameterize(self):
-        # start cannot be the same as end as the ellipse would 
+        # start cannot be the same as end as the ellipse would
         # not be well defined
         assert self.start != self.end
 
-        # See http://www.w3.org/TR/SVG/implnote.html#ArcImplementationNotes
-        # my notation roughly follows theirs
-        rx = self.radius.real
-        ry = self.radius.imag
-        rx_sqd = rx * rx
-        ry_sqd = ry * ry
+        # Compute convenience parameters.
+        self.phi = radians(self.rotation)
+        self.rot_matrix = exp(1j * self.phi)
 
-        # Transform z-> z' = x' + 1j*y'
-        # = self.rot_matrix**(-1)*(z - (end+start)/2)
-        # coordinates.  This translates the ellipse so that the midpoint
-        # between self.end and self.start lies on the origin and rotates
-        # the ellipse so that the its axes align with the xy-coordinate axes.
-        # Note:  This sends self.end to -self.start
-        zp1 = (1 / self.rot_matrix) * (self.start - self.end) / 2
-        x1p, y1p = zp1.real, zp1.imag
-        x1p_sqd = x1p * x1p
-        y1p_sqd = y1p * y1p
+        cosr = cos(radians(self.rotation))
+        sinr = sin(radians(self.rotation))
+        dx = (self.start.real - self.end.real) / 2
+        dy = (self.start.imag - self.end.imag) / 2
+        x1prim = cosr * dx + sinr * dy
+        x1prim_sq = x1prim * x1prim
+        y1prim = -sinr * dx + cosr * dy
+        y1prim_sq = y1prim * y1prim
+
+        rx = self.radius.real
+        rx_sq = rx * rx
+        ry = self.radius.imag
+        ry_sq = ry * ry
 
         # Correct out of range radii
-        # Note: an ellipse going through start and end with radius and phi
-        # exists if and only if radius_check is true
-        radius_check = (x1p_sqd / rx_sqd) + (y1p_sqd / ry_sqd)
+        radius_check = (x1prim_sq / rx_sq) + (y1prim_sq / ry_sq)
         if radius_check > 1:
-            if self.autoscale_radius:
-                rx *= sqrt(radius_check)
-                ry *= sqrt(radius_check)
-                self.radius = rx + 1j * ry
-                rx_sqd = rx * rx
-                ry_sqd = ry * ry
-            else:
-                raise ValueError('No such elliptic arc exists.')
+            rx *= sqrt(radius_check)
+            ry *= sqrt(radius_check)
+            self.radius = rx + 1j * ry
+            rx_sq = rx * rx
+            ry_sq = ry * ry
 
-        # Compute c'=(c_x', c_y'), the center of the ellipse in (x', y') coords
-        # Noting that, in our new coord system, (x_2', y_2') = (-x_1', -x_2')
-        # and our ellipse is cut out by of the plane by the algebraic equation
-        # (x'-c_x')**2 / r_x**2 + (y'-c_y')**2 / r_y**2 = 1,
-        # we can find c' by solving the system of two quadratics given by
-        # plugging our transformed endpoints (x_1', y_1') and (x_2', y_2')
-        tmp = rx_sqd * y1p_sqd + ry_sqd * x1p_sqd
-        radicand = (rx_sqd * ry_sqd - tmp) / tmp
-        try:
-            radical = sqrt(radicand)
-        except ValueError:
-            radical = 0
+        t1 = rx_sq * y1prim_sq
+        t2 = ry_sq * x1prim_sq
+        c = sqrt(abs((rx_sq * ry_sq - t1 - t2) / (t1 + t2)))
+
         if self.large_arc == self.sweep:
-            cp = -radical * (rx * y1p / ry - 1j * ry * x1p / rx)
-        else:
-            cp = radical * (rx * y1p / ry - 1j * ry * x1p / rx)
+            c = -c
+        cxprim = c * rx * y1prim / ry
+        cyprim = -c * ry * x1prim / rx
 
-        # The center in (x,y) coordinates is easy to find knowing c'
-        self.center = exp(1j * self.phi) * cp + (self.start + self.end) / 2
+        self.center = complex((cosr * cxprim - sinr * cyprim) +
+                              ((self.start.real + self.end.real) / 2),
+                              (sinr * cxprim + cosr * cyprim) +
+                              ((self.start.imag + self.end.imag) / 2))
 
-        # Now we do a second transformation, from (x', y') to (u_x, u_y)
-        # coordinates, which is a translation moving the center of the
-        # ellipse to the origin and a dilation stretching the ellipse to be
-        # the unit circle
-        u1 = (x1p - cp.real) / rx + 1j * (y1p - cp.imag) / ry  # transformed start
-        u2 = (-x1p - cp.real) / rx + 1j * (-y1p - cp.imag) / ry  # transformed end
+        ux = (x1prim - cxprim) / rx
+        uy = (y1prim - cyprim) / ry
+        vx = (-x1prim - cxprim) / rx
+        vy = (-y1prim - cyprim) / ry
+        n = sqrt(ux * ux + uy * uy)
+        p = ux
+        theta = degrees(acos(p / n))
+        if uy < 0:
+            theta = -theta
+        self.theta = theta % 360
 
-        # Now compute theta and delta (we'll define them as we go)
-        # delta is the angular distance of the arc (w.r.t the circle)
-        # theta is the angle between the positive x'-axis and the start point
-        # on the circle
-        if u1.imag > 0:
-            self.theta = degrees(acos(u1.real))
-        elif u1.imag < 0:
-            self.theta = -degrees(acos(u1.real))
-        else:
-            if u1.real > 0:  # start is on pos u_x axis
-                self.theta = 0
-            else:  # start is on neg u_x axis
-                # Note: This behavior disagrees with behavior documented in
-                # http://www.w3.org/TR/SVG/implnote.html#ArcImplementationNotes
-                # where theta is set to 0 in this case.
-                self.theta = 180
-
-        det_uv = u1.real * u2.imag - u1.imag * u2.real
-
-        acosand = u1.real * u2.real + u1.imag * u2.imag
-        if acosand > 1 or acosand < -1:
-            acosand = round(acosand)
-        if det_uv > 0:
-            self.delta = degrees(acos(acosand))
-        elif det_uv < 0:
-            self.delta = -degrees(acos(acosand))
-        else:
-            if u1.real * u2.real + u1.imag * u2.imag > 0:
-                # u1 == u2
-                self.delta = 0
-            else:
-                # u1 == -u2
-                # Note: This behavior disagrees with behavior documented in
-                # http://www.w3.org/TR/SVG/implnote.html#ArcImplementationNotes
-                # where delta is set to 0 in this case.
-                self.delta = 180
-
-        if not self.sweep and self.delta >= 0:
+        n = sqrt((ux * ux + uy * uy) * (vx * vx + vy * vy))
+        p = ux * vx + uy * vy
+        d = p/n
+        # In certain cases the above calculation can through inaccuracies
+        # become just slightly out of range, f ex -1.0000000000000002.
+        if d > 1.0:
+            d = 1.0
+        elif d < -1.0:
+            d = -1.0
+        delta = degrees(acos(d))
+        if (ux * vy - uy * vx) < 0:
+            delta = -delta
+        self.delta = delta % 360
+        if not self.sweep:
             self.delta -= 360
-        elif self.large_arc and self.delta <= 0:
-            self.delta += 360
 
     def point(self, t):
-        if t == 0:
-            return self.start
-        if t == 1:
-            return self.end
-        angle = radians(self.theta + t * self.delta)
+        angle = np.radians(self.theta + t*self.delta)
         cosphi = self.rot_matrix.real
         sinphi = self.rot_matrix.imag
         rx = self.radius.real
         ry = self.radius.imag
 
         # z = self.rot_matrix*(rx*cos(angle) + 1j*ry*sin(angle)) + self.center
-        x = rx * cosphi * cos(angle) - ry * sinphi * sin(angle) + self.center.real
-        y = rx * sinphi * cos(angle) + ry * cosphi * sin(angle) + self.center.imag
-        return complex(x, y)
+        x = rx*cosphi*np.cos(angle) - ry*sinphi*np.sin(angle) + self.center.real
+        y = rx*sinphi*np.cos(angle) + ry*cosphi*np.sin(angle) + self.center.imag
+        return x + 1j * y
 
     def bpoints(self):
         return self.start, self.radius, self.rotation, self.large_arc, self.sweep, self.end, self.phi, self.rot_matrix
@@ -470,70 +362,77 @@ class Arc:
         else:
             return False
 
+    @staticmethod
+    def _sign(x):
+        if x > 0:
+            return 1
+        elif x < 0:
+            return -1
+        else:
+            return 0
+
     def transform(self, matrix):
-            rh, rv = self.radius.real, self.radius.imag
-            rotation = radians(self.rotation)
+        rx, ry = self.radius.real, self.radius.imag
+        rotation = radians(self.rotation)
 
-            s = sin(rotation)
-            c = cos(rotation)
+        s = sin(rotation)
+        c = cos(rotation)
 
-            m = (matrix[0] * rh * +c + matrix[2] * rv * s,
-                 matrix[1] * rh * +c + matrix[3] * rv * s,
-                 matrix[0] * rv * -c + matrix[2] * rh * c,
-                 matrix[1] * rv * -c + matrix[3] * rh * c,)
+        m = (matrix[0] * +rx * c + matrix[2] * rx * s,
+             matrix[1] * +rx * c + matrix[3] * rx * s,
+             matrix[0] * -ry * s + matrix[2] * ry * c,
+             matrix[1] * -ry * s + matrix[3] * ry * c)
 
-            a = m[0] ** 2 + m[2] ** 2
-            c = m[1] ** 2 + m[3] ** 2
-            b = (m[0] * m[1] + m[2] * m[3]) * 2
+        a = m[0] ** 2 + m[2] ** 2
+        c = m[1] ** 2 + m[3] ** 2
+        b = (m[0] * m[1] + m[2] * m[3]) * 2
 
-            ac = a - c
+        ac = a - c
 
-            if self._near_zero(b):
-                rotation = 0
-                a2 = a
-                c2 = c
+        if self._near_zero(b):
+            rotation = 0
+            a2 = a
+            c2 = c
+        else:
+            if self._near_zero(ac):
+                a2 = a + b * 0.5
+                c2 = a - b * 0.5
+                rotation = pi / 4 * self._sign(self.rotation)
             else:
-                if self._near_zero(ac):
-                    a2 = a + b * 0.5
-                    c2 = a - b * 0.5
-                    rotation = pi / 4
+                k = 1 + b ** 2 / ac ** 2
+
+                if k < 0:
+                    k = 0
                 else:
-                    k = 1 + b ** 2 / ac ** 2
+                    k = sqrt(k)
 
-                    if k < 0:
-                        k = 0
-                    else:
-                        k = sqrt(k)
+                a2 = 0.5 * (a + c + k * ac)
+                c2 = 0.5 * (a + c - k * ac)
+                rotation = 0.5 * atan2(b, ac)
 
-                    a2 = 0.5 * (a + c + k * ac)
-                    c2 = 0.5 * (a + c - k * ac)
-                    rotation = 0.5 * atan2(b, ac)
+        if a2 < 0:
+            a2 = 0
+        else:
+            a2 = sqrt(a2)
 
-            if a2 < 0:
-                a2 = 0
-            else:
-                a2 = sqrt(a2)
+        if c2 < 0:
+            c2 = 0
+        else:
+            c2 = sqrt(c2)
 
-            if c2 < 0:
-                c2 = 0
-            else:
-                c2 = sqrt(c2)
+        if ac <= 0:
+            ry = a2
+            rx = c2
+        else:
+            rx = a2
+            ry = c2
 
-            if ac <= 0:
-                rv = a2
-                rh = c2
-            else:
-                rh = a2
-                rv = c2
+        if matrix[0] * matrix[3] - matrix[1] * matrix[2] < 0:
+            self.sweep = not self.sweep
 
-            if matrix[0] * matrix[3] - matrix[1] * matrix[2] < 0:
-                self.sweep = not self.sweep
+        self.radius = complex(rx, ry)
+        self.rotation = degrees(rotation)
+        self.start = matrix @ self.start
+        self.end = matrix @ self.end
 
-            self.radius = (rh, rv)
-            self.rotation = degrees(rotation)
-            self.start = matrix @ self.start
-            self.end = matrix @ self.end
-
-            self._parameterize()
-
-
+        self._parameterize()
