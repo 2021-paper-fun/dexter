@@ -614,14 +614,9 @@ class SVGEllipse(SVGPath):
 
         rx, ry, cx, cy = float(rx), float(ry), float(cx), float(cy)
 
-        magic = 1.815
-
-        d = ['M', (cx - rx), cy,
-             'C', (cx - rx), (cy - ry / magic), (cx - rx / magic), (cy - ry), cx, (cy - ry),
-             'C', (cx + rx / magic), (cy - ry), (cx + rx), (cy - ry / magic), (cx + rx), cy,
-             'C', (cx + rx), (cy + ry / magic), (cx + rx / magic), (cy + ry), cx, (cy + ry),
-             'C', (cx - rx / magic), (cy + ry), (cx - rx), (cy + ry / magic), (cx - rx), cy,
-             'Z']
+        d = ['M', cx - rx, cy,
+             'a', rx, ry, 0, 1, 0, +(rx * 2), 0,
+             'a', rx, ry, 0, 1, 0, -(rx * 2), 0]
 
         return self._stringify(d)
 
@@ -642,8 +637,7 @@ class SVGCircle(SVGPath):
 
         cx, cy, r = float(cx), float(cy), float(r)
 
-        d = ['M', cx, cy,
-             'm', -r, 0,
+        d = ['M', cx - r, cy,
              'a', r, r, 0, 1, 0, +(r * 2), 0,
              'a', r, r, 0, 1, 0, -(r * 2), 0]
 
@@ -727,10 +721,10 @@ for name, cls in inspect.getmembers(sys.modules[__name__], inspect.isclass):
         svg_classes[svg_ns + tag] = cls
 
 
-svg = SVG('trace.svg')
+svg = SVG('test.svg')
 
 
-paths = svg[0][0]
+paths = svg[0]
 
 for path in paths:
     print(path.length_info())
