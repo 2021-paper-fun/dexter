@@ -5,12 +5,11 @@ import copy
 import inspect
 import sys
 import os
-import logging
+from util import logger
 import matplotlib.pyplot as plt
 from drawing.path import *
 import xml.etree.ElementTree as etree
 
-logger = logging.getLogger('universe')
 
 COMMAND_RE = re.compile('([MmZzLlHhVvCcSsQqTtAa])')
 FLOAT_RE = re.compile('[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?')
@@ -214,12 +213,12 @@ class SVG(Transformable):
         self.root = None
 
         if filename:
-            self.parse(filename)
+            self.filename = filename
+            tree = etree.parse(filename)
+            self.parse(tree)
 
-    def parse(self, filename):
-        self.filename = filename
 
-        tree = etree.parse(filename)
+    def parse(self, tree):
         self.root = tree.getroot()
 
         if self.root.tag != svg_ns + 'svg':
@@ -238,8 +237,15 @@ class SVG(Transformable):
         else:
             width, height = base_group.viewport.real, base_group.viewport.imag
 
-        # Handle scaling to viewport. Use meet only.
-        align = self.root.get('preserveAspectRatio', 'xMidYMid').split()[0].lower()
+        # Handle scaling to viewport.
+        preserve_ar = self.root.get('preserveAspectRatio', 'xMidYMid').split()
+
+        if len(preserve_ar) != 1:
+            mos = preserve_ar[1]
+        else:
+            mos = 'meet'
+
+        align = preserve_ar[0].lower()
         x_align, y_align = align[:4], align[4:]
 
         # Scale if necessary.
@@ -249,7 +255,11 @@ class SVG(Transformable):
 
             sx = width / w
             sy = height / h
-            s = min(sx, sy)
+
+            if mos == 'slice':
+                s = max(sx, sy)
+            else:
+                s = min(sx, sy)
 
             tx = -mx * s
             ty = -my * s
@@ -709,8 +719,59 @@ class SVGRectangle(SVGPath):
 
 
 class Drawing:
-    def __init__(self):
-        pass
+    def __init__(self, file, viewport, dx=5, min_points=5, auto_scale=True, align='xMidYMid'):
+        self.file = file
+        self.viewport = viewport
+        self.dx = dx
+        self.min_points = min_points
+
+        logger.info('Loading SVG file "{}".'.format(self.file))
+        tree = etree.parse(file)
+
+        logger.info('Overwriting align.'.format(self.file))
+        root = tree.getroot()
+        root.set('preserveAspectRatio', align)
+
+        if auto_scale:
+            logger.info('Scaling to viewport.')
+            root.set('width', str(self.viewport[0]))
+            root.set('height', str(self.viewport[1]))
+
+        logger.info('Parsing modified SVG file.'.format(self.file))
+        self.svg = SVG()
+        self.svg.parse(tree)
+
+        logger.info('Converting coordinate space.')
+        matrix = SVGMatrix()
+        dims = self.svg[0].viewport
+        matrix = matrix.translate(-dims.real / 2, dims.imag)
+        matrix = matrix.flip_y()
+        self.svg.transform(matrix)
+
+        logger.info('Flattening groups.')
+        self.paths = self.svg.flatten()
+
+    def total_length(self):
+        return sum(x.length_info()[0] for x in self.paths)
+
+    def graph(self):
+        for path in self.paths:
+            lengths = path.length_info()[1]
+
+            for segment, length in zip(path, lengths):
+                n = length / self.dx
+
+                if n < self.min_points:
+                    n = self.min_points
+
+                t = np.linspace(0, 1, n)
+                points = segment.point(t)
+                points = [(x.real, x.imag) for x in points]
+                points = list(zip(*points))
+                plt.plot(points[0], points[1])
+
+        plt.axis('equal')
+        plt.show()
 
 
 svg_classes = {}
@@ -721,21 +782,7 @@ for name, cls in inspect.getmembers(sys.modules[__name__], inspect.isclass):
         svg_classes[svg_ns + tag] = cls
 
 
-svg = SVG('test.svg')
-
-
-paths = svg[0]
-
-for path in paths:
-    print(path.length_info())
-    for segment in path:
-        t = np.linspace(0, 1, 20)
-        points = segment.point(t)
-        points = [(x.real, x.imag) for x in points]
-        points = list(zip(*points))
-        plt.plot(points[0], points[1])
-
-plt.axis('equal')
-plt.show()
+drawing = Drawing('trace.svg', (11.0 * 96, 8.5 * 96))
+drawing.graph()
 
 
