@@ -217,12 +217,11 @@ class SVG(Transformable):
             tree = etree.parse(filename)
             self.parse(tree)
 
-
     def parse(self, tree):
         self.root = tree.getroot()
 
         if self.root.tag != svg_ns + 'svg':
-            raise TypeError('File {} does not seem to be a valid SVG file.'.format(filename))
+            raise TypeError('Data does not seem to be a valid SVG.')
 
         # Create a base Group to group all other items (useful for viewBox elt).
         base_group = BaseGroup()
@@ -732,6 +731,17 @@ class Drawing:
         root = tree.getroot()
         root.set('preserveAspectRatio', align)
 
+        if root.get('viewBox') is None:
+            logger.info('No viewBox. Trying to interpolate.')
+
+            width = root.get('width')
+            height = root.get('height')
+
+            if width is not None and height is not None:
+                root.set('viewBox', '0 0 {} {}'.format(width, height))
+            else:
+                logger.warning('Unable to interpolate viewBox. Image may not be properly aligned.')
+
         if auto_scale:
             logger.info('Scaling to viewport.')
             root.set('width', str(self.viewport[0]))
@@ -782,7 +792,7 @@ for name, cls in inspect.getmembers(sys.modules[__name__], inspect.isclass):
         svg_classes[svg_ns + tag] = cls
 
 
-drawing = Drawing('trace.svg', (11.0 * 96, 8.5 * 96))
+drawing = Drawing('mit.svg', (11.0 * 96, 8.5 * 96))
 drawing.graph()
 
 
