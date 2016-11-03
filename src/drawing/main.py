@@ -36,7 +36,7 @@ unit_convert = {
 }
 
 
-class Matrix:
+class SVGMatrix:
     def __init__(self, mat=(1, 0, 0, 1, 0, 0)):
         if len(mat) != 6:
             raise ValueError('Bad matrix size {}.'.format(len(mat)))
@@ -44,14 +44,14 @@ class Matrix:
         self.mat = mat
 
     def __matmul__(self, other):
-        if isinstance(other, Matrix):
+        if isinstance(other, SVGMatrix):
             a = self.mat[0] * other.mat[0] + self.mat[2] * other.mat[1]
             b = self.mat[1] * other.mat[0] + self.mat[3] * other.mat[1]
             c = self.mat[0] * other.mat[2] + self.mat[2] * other.mat[3]
             d = self.mat[1] * other.mat[2] + self.mat[3] * other.mat[3]
             e = self.mat[0] * other.mat[4] + self.mat[2] * other.mat[5] + self.mat[4]
             f = self.mat[1] * other.mat[4] + self.mat[3] * other.mat[5] + self.mat[5]
-            return Matrix((a, b, c, d, e, f))
+            return SVGMatrix((a, b, c, d, e, f))
 
         elif isinstance(other, complex):
             x = other.real * self.mat[0] + other.imag * self.mat[2] + self.mat[4]
@@ -67,11 +67,52 @@ class Matrix:
     def __getitem__(self, item):
         return self.mat[item]
 
+    def apply_matrix(self, mat):
+        return self @ SVGMatrix(mat)
+
+    def translate(self, tx, ty=None):
+        if ty is None:
+            ty = 0
+
+        return self @ SVGMatrix((1, 0, 0, 1, tx, ty))
+
+    def scale(self, sx, sy=None):
+        if sy is None:
+            sy = sx
+
+        return self @ SVGMatrix((sx, 0, 0, sy, 0, 0))
+
+    def rotate(self, a, tx=None, ty=None):
+        cosa = math.cos(math.radians(a))
+        sina = math.sin(math.radians(a))
+
+        if ty is None:
+            return self @ SVGMatrix((cosa, sina, -sina, cosa, 0, 0))
+        else:
+            return self @ \
+                   SVGMatrix((1, 0, 0, 1, tx, ty)) @ \
+                   SVGMatrix((cosa, sina, -sina, cosa, 0, 0)) @ \
+                   SVGMatrix((1, 0, 0, 1, -tx, -ty))
+
+    def skew_x(self, angle):
+        tana = math.tan(math.radians(angle))
+        return self @ SVGMatrix((1, 0, tana, 1, 0, 0))
+
+    def skew_y(self, angle):
+        tana = math.tan(math.radians(angle))
+        return self @ SVGMatrix((1, tana, 0, 1, 0, 0))
+
+    def flip_x(self):
+        return self @ SVGMatrix((-1, 0, 0, 1, 0, 0))
+
+    def flip_y(self):
+        return self @ SVGMatrix((1, 0, 0, -1, 0, 0))
+
 
 class Transformable:
     def __init__(self, elt=None):
         self.items = []
-        self.matrix = Matrix()
+        self.matrix = SVGMatrix()
         self.viewport = complex(800, 600)
 
         # ID.
@@ -96,47 +137,22 @@ class Transformable:
             args = [float(x) for x in FLOAT_RE.findall(args)]
 
             if op == 'matrix':
-                self.matrix @= Matrix(args)
+                self.matrix = self.matrix.apply_matrix(args)
 
             if op == 'translate':
-                tx = args[0]
-
-                if len(args) == 1:
-                    ty = 0
-                else:
-                    ty = args[1]
-
-                self.matrix @= Matrix((1, 0, 0, 1, tx, ty))
+                self.matrix = self.matrix.translate(*args)
 
             if op == 'scale':
-                sx = args[0]
-
-                if len(args) == 1:
-                    sy = sx
-                else:
-                    sy = args[1]
-
-                self.matrix @= Matrix((sx, 0, 0, sy, 0, 0))
+                self.matrix = self.matrix.scale(*args)
 
             if op == 'rotate':
-                cosa = math.cos(math.radians(args[0]))
-                sina = math.sin(math.radians(args[0]))
-
-                if len(args) != 1:
-                    tx, ty = args[1:3]
-                    self.matrix @= Matrix((1, 0, 0, 1, tx, ty))
-                    self.matrix @= Matrix((cosa, sina, -sina, cosa, 0, 0))
-                    self.matrix @= Matrix((1, 0, 0, 1, -tx, -ty))
-                else:
-                    self.matrix @= Matrix((cosa, sina, -sina, cosa, 0, 0))
+                self.matrix = self.matrix.rotate(*args)
 
             if op == 'skewX':
-                tana = math.tan(math.radians(args[0]))
-                self.matrix @= Matrix([1, 0, tana, 1, 0, 0])
+                self.matrix = self.matrix.skew_x(*args)
 
             if op == 'skewY':
-                tana = math.tan(math.radians(args[0]))
-                self.matrix @= Matrix([1, tana, 0, 1, 0, 0])
+                self.matrix = self.matrix.skew_y(*args)
 
     def _length(self, v, mode=None):
         # Handle empty (non-existing) length element.
@@ -190,7 +206,7 @@ class Transformable:
         return self.items[item]
 
 
-class Svg(Transformable):
+class SVG(Transformable):
     def __init__(self, filename=None):
         super().__init__()
 
@@ -216,17 +232,39 @@ class Svg(Transformable):
         # SVG dimensions.
         width, height = self._lengths(self.root.get('width'), self.root.get('height'))
 
-        # Update viewport.
-        base_group.viewport = complex(width, height)
+        # It is possible for width and height to not be defined.
+        if width != 0 and height != 0:
+            base_group.viewport = complex(width, height)
+        else:
+            width, height = base_group.viewport.real, base_group.viewport.imag
 
-        # Get matrix.
+        # Handle scaling to viewport. Use meet only.
+        align = self.root.get('preserveAspectRatio', 'xMidYMid').split()[0].lower()
+        x_align, y_align = align[:4], align[4:]
+
+        # Scale if necessary.
         if self.root.get('viewBox') is not None:
             view_box = FLOAT_RE.findall(self.root.get('viewBox'))
-            sx = width / float(view_box[2])
-            sy = height / float(view_box[3])
-            tx = -float(view_box[0])
-            ty = -float(view_box[1])
-            base_group.matrix = Matrix((sx, 0, 0, sy, tx, ty))
+            mx, my, w, h = [float(x) for x in view_box]
+
+            sx = width / w
+            sy = height / h
+            s = min(sx, sy)
+
+            tx = -mx * s
+            ty = -my * s
+
+            if x_align == 'xmid':
+                tx += (width - w * s) / 2
+            elif x_align == 'xmax':
+                tx += width - w * s
+
+            if y_align == 'ymid':
+                ty += (height - h * s) / 2
+            elif y_align == 'ymax':
+                ty += (height - h * s)
+
+            base_group.matrix = SVGMatrix((s, 0, 0, s, tx, ty))
 
         # Parse XML elements hierarchically with groups.
         base_group.append(self.root)
@@ -283,7 +321,7 @@ class BaseGroup(Group):
         return '<BaseGroup ' + self.id + '>: ' + repr(self.items)
 
 
-class Path(Transformable):
+class SVGPath(Transformable):
     tag = 'path'
 
     COMMANDS = set('MmZzLlHhVvCcSsQqTtAa')
@@ -298,7 +336,7 @@ class Path(Transformable):
 
     @staticmethod
     def _stringify(x):
-        return ' '.join(x)
+        return ' '.join(str(a) for a in x)
 
     def _tokenize_path(self, pathdef):
         for x in COMMAND_RE.split(pathdef):
@@ -489,7 +527,7 @@ class Path(Transformable):
         return '<Path ' + self.id + '>'
 
 
-class Polyline(Path):
+class SVGPolyline(SVGPath):
     tag = 'polyline'
 
     def __init__(self, elt=None):
@@ -518,7 +556,7 @@ class Polyline(Path):
         return self._stringify(d)
 
 
-class Polygon(Path):
+class SVGPolygon(SVGPath):
     tag = 'polygon'
 
     def __init__(self, elt=None):
@@ -541,7 +579,7 @@ class Polygon(Path):
         return self._stringify(d)
 
 
-class Line(Path):
+class SVGLine(SVGPath):
     tag = 'line'
 
     def __init__(self, elt=None):
@@ -560,7 +598,7 @@ class Line(Path):
         return self._stringify(d)
 
 
-class Ellipse(Path):
+class SVGEllipse(SVGPath):
     tag = 'ellipse'
 
     def __init__(self, elt=None):
@@ -574,7 +612,9 @@ class Ellipse(Path):
         rx, ry = elt.get('rx'), elt.get('ry')
         cx, cy = elt.get('cx'), elt.get('cy')
 
-        magic = 1.81
+        rx, ry, cx, cy = float(rx), float(ry), float(cx), float(cy)
+
+        magic = 1.815
 
         d = ['M', (cx - rx), cy,
              'C', (cx - rx), (cy - ry / magic), (cx - rx / magic), (cy - ry), cx, (cy - ry),
@@ -586,22 +626,31 @@ class Ellipse(Path):
         return self._stringify(d)
 
 
-class Circle(Ellipse):
-    tag = 'ellipse'
+class SVGCircle(SVGPath):
+    tag = 'circle'
 
     def __init__(self, elt=None):
         if elt is not None:
-            r = elt.get('r')
-            elt.set('rx', r)
-            elt.set('ry', r)
-
             d = self._convert(elt)
             elt.set('d', d)
 
         super().__init__(elt)
 
+    def _convert(self, elt):
+        cx, cy = elt.get('cx'), elt.get('cy')
+        r = elt.get('r')
 
-class Rectangle(Path):
+        cx, cy, r = float(cx), float(cy), float(r)
+
+        d = ['M', cx, cy,
+             'm', -r, 0,
+             'a', r, r, 0, 1, 0, +(r * 2), 0,
+             'a', r, r, 0, 1, 0, -(r * 2), 0]
+
+        return self._stringify(d)
+
+
+class SVGRectangle(SVGPath):
     tag = 'rect'
 
     def __init__(self, elt=None):
@@ -618,7 +667,7 @@ class Rectangle(Path):
                 return True
             else:
                 return False
-        except ValueError:
+        except (TypeError, ValueError):
             return False
 
     def _convert(self, elt):
@@ -677,12 +726,14 @@ for name, cls in inspect.getmembers(sys.modules[__name__], inspect.isclass):
     if tag:
         svg_classes[svg_ns + tag] = cls
 
-svg = Svg('test.svg')
-paths = svg[0]
+
+svg = SVG('trace.svg')
+
+
+paths = svg[0][0]
 
 for path in paths:
     print(path.length_info())
-
     for segment in path:
         t = np.linspace(0, 1, 20)
         points = segment.point(t)
