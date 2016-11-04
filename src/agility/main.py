@@ -4,8 +4,10 @@ from .usc import enum
 import numpy as np
 import math
 import time
-from util import logger
+import logging
 
+
+logger = logging.getLogger('universe')
 
 uscSerialMode = enum.uscSerialMode
 ChannelMode = enum.ChannelMode

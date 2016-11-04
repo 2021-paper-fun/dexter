@@ -5,13 +5,15 @@ import copy
 import inspect
 import sys
 import os
-from util import logger
+import logging
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.widgets import Button
 from drawing.path import *
 import xml.etree.ElementTree as etree
 
+
+logger = logging.getLogger('universe')
 
 COMMAND_RE = re.compile('([MmZzLlHhVvCcSsQqTtAa])')
 FLOAT_RE = re.compile('[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?')
