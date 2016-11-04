@@ -1,5 +1,5 @@
-from agility.usc.enumeration import Opcode
-from agility.usc.instruction import BytecodeInstruction
+from .enumeration import Opcode
+from .instruction import BytecodeInstruction
 
 
 class BytecodeProgram:

@@ -8,6 +8,7 @@ import os
 from util import logger
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from matplotlib.widgets import Button
 from drawing.path import *
 import xml.etree.ElementTree as etree
 
@@ -277,6 +278,7 @@ class SVG(Transformable):
                 ty += (height - h * s) / 2
             elif y_align == 'ymax':
                 ty += (height - h * s)
+
             base_group.matrix = SVGMatrix((s, 0, 0, s, tx, ty))
 
         # Parse XML elements hierarchically with groups.
@@ -762,7 +764,7 @@ class Drawing:
             width = root.get('width')
             height = root.get('height')
 
-            if width is not None and height is not None:
+            if width and height:
                 root.set('viewBox', '0 0 {} {}'.format(width, height))
             else:
                 logger.warning('Unable to interpolate viewBox. Skipping scale and resize.')
@@ -793,7 +795,7 @@ class Drawing:
             ty = (self.viewport[1] - height) / 2
             matrix = matrix.translate(tx, ty)
 
-        if transform is not None:
+        if transform:
             matrix = matrix @ transform
 
         self.svg.transform(matrix)
@@ -838,22 +840,51 @@ class Drawing:
         x_max = max(np.real(path).max() for path in self.points)
         y_max = max(np.imag(path).max() for path in self.points)
 
-    def preview(self):
-        fig = plt.figure()
-        ax = fig.add_subplot(111, aspect='equal')
+        return x_min, y_min, x_max, y_max
 
-        for path in self.points:
-            ax.plot(np.real(path), np.imag(path), zorder=2, color='black')
+    def preview(self):
+        fig, ax = plt.subplots()
+        plt.axis('equal')
+
+        for segment in self.points:
+            ax.plot(np.real(segment), np.imag(segment), zorder=2, color='black')
 
         w, h = self.viewport
         ax.add_patch(patches.Rectangle((-w / 2, 0), w, h,
-                                       facecolor='blue', zorder=1, alpha=0.2))
+                                       facecolor='white', zorder=1, alpha=1))
 
         border = 20
         ax.set_xlim(-w / 2 - border, w / 2 + border)
         ax.set_ylim(0 - border, h + border)
 
+        plt.subplots_adjust(bottom=0.2)
+        ax.set_axis_bgcolor('#FADBD8')
+
+        reject = plt.axes([0.69, 0.05, 0.1, 0.075])
+        accept = plt.axes([0.80, 0.05, 0.1, 0.075])
+
+        b_reject = Button(reject, 'Reject')
+        b_accept = Button(accept, 'Accept')
+
+        class Callback:
+            def __init__(self):
+                self.status = None
+
+            def reject(self, event):
+                plt.close()
+                self.status = False
+
+            def accept(self, event):
+                plt.close()
+                self.status = True
+
+        callback = Callback()
+        b_reject.on_clicked(callback.reject)
+        b_accept.on_clicked(callback.accept)
+
         plt.show()
+
+        return callback.status
 
 
 svg_classes = {}

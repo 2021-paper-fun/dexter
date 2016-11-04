@@ -1,8 +1,15 @@
-from agility.maestro import Maestro
+from .maestro import Maestro
+from .usc import Usc
+from .usc import enum
 import numpy as np
 import math
 import time
 from util import logger
+
+
+uscSerialMode = enum.uscSerialMode
+ChannelMode = enum.ChannelMode
+HomeMode = enum.HomeMode
 
 
 class ServoError(Exception):
@@ -169,3 +176,115 @@ class Arm:
             return False
 
         return True
+
+
+class Dummy:
+    """
+    Implements a dummy class that is completely inert.
+    """
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __getattr__(self, item):
+        return self.dummy_function
+
+    def __setattr__(self, key, value):
+        pass
+
+    def dummy_function(*args, **kwargs):
+        pass
+
+
+class Agility:
+    def __init__(self, arm):
+        # Set up arm.
+        self.arm = arm
+
+        # Set up Usc.
+        try:
+            self.usc = Usc()
+            logger.info("Successfully attached to Maestro's low-level interface.")
+        except ConnectionError:
+            self.usc = Dummy()
+            logger.warn("Failed to attached to Maestro's low-level interface. "
+                        "If not debugging, consider this a fatal error.")
+
+        # Set up virtual COM and TTL ports.
+        try:
+            self.maestro = Maestro()
+            logger.info("Successfully attached to Maestro's command port.")
+        except ConnectionError:
+            self.maestro = Dummy()
+            logger.warn("Failed to attached to Maestro's command port. "
+                        "If not debugging, consider this a fatal error.")
+
+        # Zero.
+        self.zero()
+
+    def configure(self):
+        """
+        Configure the Maestro by writing home positions and other configuration data to the device.
+        """
+
+        settings = self.usc.getUscSettings()
+        settings.serialMode = uscSerialMode.SERIAL_MODE_USB_DUAL_PORT
+
+        for servo in self.arm:
+            servo.zero()
+            channel = settings.channelSettings[servo.channel]
+            channel.mode = ChannelMode.Servo
+            channel.homeMode = HomeMode.Goto
+            channel.home = servo.target
+            channel.minimum = (servo.min_pwm // 64) * 64
+            channel.maximum = -(-servo.max_pwm // 64) * 64
+
+        self.usc.setUscSettings(settings, False)
+        self.usc.reinitialize(500)
+
+    def go_home(self):
+        """
+        Let the Maestro return all servos to home.
+        """
+
+        self.maestro.go_home()
+
+    def zero(self):
+        for servo in self.arm:
+            servo.set_target(0)
+
+        self.maestro.end_together(self.arm)
+        self.wait()
+
+    def wait(self, servos=None):
+        """
+        Block until all servos have reached their targets.
+        :param servos: An array of servos. If None, checks if all servos have reached their targets.
+        """
+
+        while not self.is_at_target(servos):
+            time.sleep(0.001)
+
+    def is_at_target(self, servos=None):
+        """
+        Check if servos are at their target.
+        :param servos: One or more servo objects. If None, checks if all servos have reached their targets.
+        :return: True if all servos are at their targets, False otherwise.
+        """
+
+        if servos is None:
+            return not self.maestro.get_moving_state()
+        elif isinstance(servos, Servo):
+            self.maestro.get_position(servos)
+
+            if servos.at_target():
+                return True
+
+            return False
+        else:
+            self.maestro.get_multiple_positions(servos)
+
+            if all(servo.at_target() for servo in servos):
+                return True
+
+            return False

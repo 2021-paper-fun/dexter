@@ -1,8 +1,8 @@
 import re
 
-from agility.usc.program import BytecodeProgram
-from agility.usc.enumeration import Opcode, Mode, Keyword, BlockType
-from agility.usc.instruction import BytecodeInstruction
+from .program import BytecodeProgram
+from .enumeration import Opcode, Mode, Keyword, BlockType
+from .instruction import BytecodeInstruction
 
 
 class BytecodeReader:

@@ -1,9 +1,7 @@
-import usb, logging, time, pickle
-from agility.usc.structure import *
-from agility.usc.settings import UscSettings, ChannelSetting
-from agility.usc.enumeration import uscRequest, uscParameter, Opcode, ChannelMode, HomeMode
-
-logger = logging.getLogger('universe')
+import usb, time, pickle
+from .structure import *
+from .settings import UscSettings, ChannelSetting
+from .enumeration import uscRequest, uscParameter, Opcode, ChannelMode, HomeMode
 
 
 class Range:

@@ -1,4 +1,4 @@
-from agility.usc.enumeration import Opcode
+from .enumeration import Opcode
 
 
 class BytecodeInstruction:
