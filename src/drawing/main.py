@@ -851,7 +851,7 @@ class Drawing:
 
         w, h = self.viewport
         ax.add_patch(patches.Rectangle((-w / 2, 0), w, h,
-                                       facecolor='white', zorder=1, alpha=1))
+                                       facecolor='white', zorder=1, alpha=1, edgecolor='none'))
 
         border = 20
         ax.set_xlim(-w / 2 - border, w / 2 + border)
@@ -868,11 +868,10 @@ class Drawing:
 
         class Callback:
             def __init__(self):
-                self.status = None
+                self.status = False
 
             def reject(self, event):
                 plt.close()
-                self.status = False
 
             def accept(self, event):
                 plt.close()

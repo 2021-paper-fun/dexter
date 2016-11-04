@@ -222,6 +222,13 @@ class Agility:
         # Zero.
         self.zero()
 
+    def draw(self, drawing, v):
+        """
+        Draw a given drawing.
+        :param drawing: A Drawing object.
+        :param v: The maximum linear velocity in cm / s.
+        """
+
     def configure(self):
         """
         Configure the Maestro by writing home positions and other configuration data to the device.
