@@ -216,8 +216,8 @@ class Agility:
             logger.info("Successfully attached to Maestro's command port.")
         except ConnectionError:
             self.maestro = Dummy()
-            logger.warn("Failed to attached to Maestro's command port. "
-                        "If not debugging, consider this a fatal error.")
+            logger.warning("Failed to attached to Maestro's command port. "
+                           "If not debugging, consider this a fatal error.")
 
         # Zero.
         self.zero()
