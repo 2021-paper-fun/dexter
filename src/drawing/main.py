@@ -7,6 +7,7 @@ import sys
 import os
 from util import logger
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 from drawing.path import *
 import xml.etree.ElementTree as etree
 
@@ -112,7 +113,7 @@ class Transformable:
     def __init__(self, elt=None):
         self.items = []
         self.matrix = SVGMatrix()
-        self.viewport = complex(800, 600)
+        self.viewport = (800, 600)
 
         # ID.
         self.id = hex(id(self))
@@ -153,7 +154,7 @@ class Transformable:
             if op == 'skewY':
                 self.matrix = self.matrix.skew_y(*args)
 
-    def _length(self, v, mode=None):
+    def length(self, v, mode=None):
         # Handle empty (non-existing) length element.
         if v is None:
             return 0
@@ -174,14 +175,14 @@ class Transformable:
 
         if unit == '%':
             if mode == 'x':
-                return value * unit_convert[unit] * self.viewport.imag
+                return value * unit_convert[unit] * self.viewport[0]
             if mode == 'y':
-                return value * unit_convert[unit] * self.viewport.real
+                return value * unit_convert[unit] * self.viewport[1]
 
         return value * unit_convert[unit]
 
-    def _lengths(self, x, y):
-        return self._length(x, 'x'), self._length(y, 'y')
+    def lengths(self, x, y):
+        return self.length(x, 'x'), self.length(y, 'y')
 
     def transform(self, matrix=None):
         for x in self.items:
@@ -206,11 +207,14 @@ class Transformable:
 
 
 class SVG(Transformable):
-    def __init__(self, filename=None):
+    def __init__(self, filename=None, viewport=None):
         super().__init__()
 
         self.filename = None
         self.root = None
+
+        if viewport is not None:
+            self.viewport = viewport
 
         if filename:
             self.filename = filename
@@ -225,16 +229,17 @@ class SVG(Transformable):
 
         # Create a base Group to group all other items (useful for viewBox elt).
         base_group = BaseGroup()
+        base_group.viewport = self.viewport
         self.items.append(base_group)
 
         # SVG dimensions.
-        width, height = self._lengths(self.root.get('width'), self.root.get('height'))
+        width, height = self.lengths(self.root.get('width'), self.root.get('height'))
 
-        # It is possible for width and height to not be defined.
+        # If width and height are not defined, scale to viewport.
         if width != 0 and height != 0:
-            base_group.viewport = complex(width, height)
+            base_group.viewport = (width, height)
         else:
-            width, height = base_group.viewport.real, base_group.viewport.imag
+            width, height = base_group.viewport[0], base_group.viewport[1]
 
         # Handle scaling to viewport.
         preserve_ar = self.root.get('preserveAspectRatio', 'xMidYMid').split()
@@ -272,7 +277,6 @@ class SVG(Transformable):
                 ty += (height - h * s) / 2
             elif y_align == 'ymax':
                 ty += (height - h * s)
-
             base_group.matrix = SVGMatrix((s, 0, 0, s, tx, ty))
 
         # Parse XML elements hierarchically with groups.
@@ -564,6 +568,9 @@ class SVGPolyline(SVGPath):
 
         return self._stringify(d)
 
+    def __repr__(self):
+        return '<Polyline ' + self.id + '>'
+
 
 class SVGPolygon(SVGPath):
     tag = 'polygon'
@@ -587,6 +594,9 @@ class SVGPolygon(SVGPath):
 
         return self._stringify(d)
 
+    def __repr__(self):
+        return '<Polygon ' + self.id + '>'
+
 
 class SVGLine(SVGPath):
     tag = 'line'
@@ -605,6 +615,9 @@ class SVGLine(SVGPath):
         d = ['M', x1, y1, 'L', x2, y2]
 
         return self._stringify(d)
+
+    def __repr__(self):
+        return '<Line ' + self.id + '>'
 
 
 class SVGEllipse(SVGPath):
@@ -629,6 +642,9 @@ class SVGEllipse(SVGPath):
 
         return self._stringify(d)
 
+    def __repr__(self):
+        return '<Ellipse ' + self.id + '>'
+
 
 class SVGCircle(SVGPath):
     tag = 'circle'
@@ -652,6 +668,8 @@ class SVGCircle(SVGPath):
 
         return self._stringify(d)
 
+    def __repr__(self):
+        return '<Circle ' + self.id + '>'
 
 class SVGRectangle(SVGPath):
     tag = 'rect'
@@ -716,20 +734,27 @@ class SVGRectangle(SVGPath):
 
         return self._stringify(d)
 
+    def __repr__(self):
+        return '<Rectangle ' + self.id + '>'
+
 
 class Drawing:
-    def __init__(self, file, viewport, dx=5, min_points=5, auto_scale=True, align='xMidYMid'):
+    def __init__(self, file, viewport, **kwargs):
         self.file = file
         self.viewport = viewport
-        self.dx = dx
-        self.min_points = min_points
+
+        self.dx = kwargs.get('dx', 5)
+        self.min_points = kwargs.get('min_points', 5)
+
+        resize = kwargs.get('resize', False)
+        center = kwargs.get('center', True)
+        transform = kwargs.get('transform', None)
+
+        assert self.min_points >= 2
 
         logger.info('Loading SVG file "{}".'.format(self.file))
         tree = etree.parse(file)
-
-        logger.info('Overwriting align.'.format(self.file))
         root = tree.getroot()
-        root.set('preserveAspectRatio', align)
 
         if root.get('viewBox') is None:
             logger.info('No viewBox. Trying to interpolate.')
@@ -740,31 +765,50 @@ class Drawing:
             if width is not None and height is not None:
                 root.set('viewBox', '0 0 {} {}'.format(width, height))
             else:
-                logger.warning('Unable to interpolate viewBox. Image may not be properly aligned.')
+                logger.warning('Unable to interpolate viewBox. Skipping scale and resize.')
+                resize = False
+                center = False
 
-        if auto_scale:
-            logger.info('Scaling to viewport.')
+        if resize:
             root.set('width', str(self.viewport[0]))
             root.set('height', str(self.viewport[1]))
 
+        if center:
+            root.set('preserveAspectRatio', 'xMidYMid')
+
         logger.info('Parsing modified SVG file.'.format(self.file))
-        self.svg = SVG()
+        self.svg = SVG(viewport=self.viewport)
         self.svg.parse(tree)
 
-        logger.info('Converting coordinate space.')
+        logger.info('Applying transformations.')
+
         matrix = SVGMatrix()
-        dims = self.svg[0].viewport
-        matrix = matrix.translate(-dims.real / 2, dims.imag)
+        matrix = matrix.translate(-self.viewport[0] / 2, self.viewport[1])
         matrix = matrix.flip_y()
+
+        width, height = self.svg.lengths(root.get('width'), root.get('height'))
+
+        if center and width != 0 and height != 0:
+            tx = (self.viewport[0] - width) / 2
+            ty = (self.viewport[1] - height) / 2
+            matrix = matrix.translate(tx, ty)
+
+        if transform is not None:
+            matrix = matrix @ transform
+
         self.svg.transform(matrix)
 
         logger.info('Flattening groups.')
         self.paths = self.svg.flatten()
 
-    def total_length(self):
-        return sum(x.length_info()[0] for x in self.paths)
+        logger.info('Generating path points.')
+        self.points = self._get_points()
 
-    def graph(self):
+        logger.info('Completed processing SVG.')
+
+    def _get_points(self):
+        points = []
+
         for path in self.paths:
             lengths = path.length_info()[1]
 
@@ -774,13 +818,41 @@ class Drawing:
                 if n < self.min_points:
                     n = self.min_points
 
-                t = np.linspace(0, 1, n)
-                points = segment.point(t)
-                points = [(x.real, x.imag) for x in points]
-                points = list(zip(*points))
-                plt.plot(points[0], points[1])
+                ts = np.linspace(0, 1, n)
 
-        plt.axis('equal')
+                if n < 20:
+                    p = np.array([segment.point(t) for t in ts])
+                    points.append(p)
+                else:
+                    p = segment.points(ts)
+                    points.append(p)
+
+        return points
+
+    def total_length(self):
+        return sum(x.length_info()[0] for x in self.paths)
+
+    def bounding_box(self):
+        x_min = min(np.real(path).min() for path in self.points)
+        y_min = min(np.imag(path).min() for path in self.points)
+        x_max = max(np.real(path).max() for path in self.points)
+        y_max = max(np.imag(path).max() for path in self.points)
+
+    def preview(self):
+        fig = plt.figure()
+        ax = fig.add_subplot(111, aspect='equal')
+
+        for path in self.points:
+            ax.plot(np.real(path), np.imag(path), zorder=2, color='black')
+
+        w, h = self.viewport
+        ax.add_patch(patches.Rectangle((-w / 2, 0), w, h,
+                                       facecolor='blue', zorder=1, alpha=0.2))
+
+        border = 20
+        ax.set_xlim(-w / 2 - border, w / 2 + border)
+        ax.set_ylim(0 - border, h + border)
+
         plt.show()
 
 
@@ -790,9 +862,4 @@ for name, cls in inspect.getmembers(sys.modules[__name__], inspect.isclass):
     tag = getattr(cls, 'tag', None)
     if tag:
         svg_classes[svg_ns + tag] = cls
-
-
-drawing = Drawing('mit.svg', (11.0 * 96, 8.5 * 96))
-drawing.graph()
-
 

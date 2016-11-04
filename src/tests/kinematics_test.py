@@ -7,7 +7,12 @@ from mpl_toolkits.mplot3d import Axes3D
 
 def test_system(lengths, constraints):
     target = constraints[:3]
-    angles = solve_ik(lengths, constraints)
+
+    try:
+        angles = solve_ik(lengths, constraints)
+    except:
+        return False
+
     # print(angles)
 
     for angle in angles:
@@ -88,8 +93,8 @@ def graph(points, d):
     plt.show()
 
 
-lengths = (10.0, 10.0, 10.0, 5.0)
-phi = radians(135)
+lengths = (10.0, 10.0, 1.0, 5.0)
+phi = radians(90)
 
 # test_system(lengths, (15, 0, 5, phi))
 

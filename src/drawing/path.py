@@ -48,6 +48,9 @@ class Line:
         distance = self.end - self.start
         return self.start + distance * t
 
+    def points(self, t):
+        return self.point(t)
+
     def length(self, error=None, min_depth=None):
         """returns the length of the line segment between t0 and t1."""
         return abs(self.end - self.start)
@@ -74,22 +77,25 @@ class QuadraticBezier:
     def point(self, t):
         return (1 - t) ** 2 * self.start + 2 * (1 - t) * t * self.control + t ** 2 * self.end
 
+    def points(self, t):
+        return self.point(t)
+
     def length(self, error=None, min_depth=None):
         if self.length_info['bpoints'] == self.bpoints():
             return self.length_info['length']
 
-        a = self.start - 2*self.control + self.end
-        b = 2*(self.control - self.start)
-        a_dot_b = a.real*b.real + a.imag*b.imag
+        a = self.start - 2 * self.control + self.end
+        b = 2 * (self.control - self.start)
+        a_dot_b = a.real * b.real + a.imag * b.imag
 
         if abs(a) < 1e-12:
             s = abs(b)
-        elif abs(a_dot_b + abs(a)*abs(b)) < 1e-12:
-            k = abs(b)/abs(a)
+        elif abs(a_dot_b + abs(a) * abs(b)) < 1e-12:
+            k = abs(b) / abs(a)
             if k >= 2:
                 s = abs(b) - abs(a)
             else:
-                s = abs(a)*(k**2/2 - k + 1)
+                s = abs(a) * (k ** 2 / 2 - k + 1)
         else:
             # For an explanation of this case, see
             # http://www.malczak.info/blog/quadratic-bezier-curve-length/
@@ -104,7 +110,7 @@ class QuadraticBezier:
             ba = b / a2
 
             s = (a32 * s_abc + a2 * b * (s_abc - c2) + (4 * c * a - b ** 2) *
-                    log((2 * a2 + ba + s_abc) / (ba + c2))) / (4 * a32)
+                 log((2 * a2 + ba + s_abc) / (ba + c2))) / (4 * a32)
 
         self.length_info['length'] = s
         self.length_info['bpoints'] = self.bpoints()
@@ -126,9 +132,7 @@ class CubicBezier:
         self.control2 = control2
         self.end = end
 
-        # used to know if self.length needs to be updated
-        self.length_info = {'length': None, 'bpoints': None, 'error': None,
-                             'min_depth': None}
+        self.length_info = {'length': None, 'bpoints': None, 'error': None, 'min_depth': None}
 
     def __repr__(self):
         return 'CubicBezier(start={}, control1={}, control2={}, end={})'.format(self.start, self.control1,
@@ -147,6 +151,9 @@ class CubicBezier:
                 3 * (self.start + self.control2) - 6 * self.control1 + t * (
                     -self.start + 3 * (self.control1 - self.control2) + self.end
                 )))
+
+    def points(self, t):
+        return self.point(t)
 
     def length(self, error=LENGTH_ERROR, min_depth=LENGTH_MIN_DEPTH):
         """Calculate the length of the path up to a certain position"""
@@ -213,8 +220,7 @@ class Arc:
         self.phi = None
         self.rot_matrix = None
 
-        self.length_info = {'length': None, 'bpoints': None, 'error': None,
-                             'min_depth': None}
+        self.length_info = {'length': None, 'bpoints': None, 'error': None, 'min_depth': None}
 
         # Derive derived parameters
         self._parameterize()
@@ -299,15 +305,27 @@ class Arc:
             self.delta -= 360
 
     def point(self, t):
-        angle = np.radians(self.theta + t*self.delta)
+        angle = radians(self.theta + t * self.delta)
         cosphi = self.rot_matrix.real
         sinphi = self.rot_matrix.imag
         rx = self.radius.real
         ry = self.radius.imag
 
-        # z = self.rot_matrix*(rx*cos(angle) + 1j*ry*sin(angle)) + self.center
-        x = rx*cosphi*np.cos(angle) - ry*sinphi*np.sin(angle) + self.center.real
-        y = rx*sinphi*np.cos(angle) + ry*cosphi*np.sin(angle) + self.center.imag
+        x = rx * cosphi * cos(angle) - ry * sinphi * sin(angle) + self.center.real
+        y = rx * sinphi * cos(angle) + ry * cosphi * sin(angle) + self.center.imag
+
+        return x + 1j * y
+
+    def points(self, t):
+        angle = np.radians(self.theta + t * self.delta)
+        cosphi = self.rot_matrix.real
+        sinphi = self.rot_matrix.imag
+        rx = self.radius.real
+        ry = self.radius.imag
+
+        x = rx * cosphi * np.cos(angle) - ry * sinphi * np.sin(angle) + self.center.real
+        y = rx * sinphi * np.cos(angle) + ry * cosphi * np.sin(angle) + self.center.imag
+
         return x + 1j * y
 
     def bpoints(self):

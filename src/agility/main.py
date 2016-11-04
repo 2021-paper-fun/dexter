@@ -2,9 +2,7 @@ from agility.maestro import Maestro
 import numpy as np
 import math
 import time
-import logging
-
-logger = logging.getLogger('universe')
+from util import logger
 
 
 class ServoError(Exception):
@@ -137,3 +135,37 @@ class Servo:
         """
 
         return self.min_rad + self.k_qus2ang * (pwm - self.min_qus)
+
+
+class Arm:
+    def __init__(self, servo1, servo2, servo3, servo4,
+                 lengths, fk_solver, ik_solver):
+
+        self.servos = [servo1, servo2, servo3, servo4]
+        self.lengths = lengths
+        self.length = sum(lengths)
+
+        self.fk_solver = fk_solver
+        self.ik_solver = ik_solver
+
+        self.last_position = None
+
+    def __getitem__(self, key):
+        return self.servos[key]
+
+    def __len__(self):
+        return len(self.servos)
+
+    def target_point(self, point, solution=0):
+        try:
+            angles = self.ik_solver(self.lengths, point)[solution]
+
+            for servo, angle in zip(self.servos, angles):
+                servo.set_target(angle)
+
+            self.last_position = point
+        except (ServoError, ValueError, ZeroDivisionError):
+            logger.error('Arm is unable to reach point ({:.2f}, {:.2f}, {:.2f})'.format(*point))
+            return False
+
+        return True

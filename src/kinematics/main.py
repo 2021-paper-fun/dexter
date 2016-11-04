@@ -1,27 +1,22 @@
 from math import *
-from numba import jit
 
 
-@jit(nopython=True, cache=True)
 def cross(a, b):
     return (a[1] * b[2] - a[2] * b[1],
             a[2] * b[0] - a[0] * b[2],
             a[0] * b[1] - a[1] * b[0])
 
 
-@jit(nopython=True, cache=True)
 def dot(a, b):
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 
 
-@jit(nopython=True, cache=True)
 def vector(a, b):
     return (b[0] - a[0],
             b[1] - a[1],
             b[2] - a[2])
 
 
-@jit(nopython=True, cache=True)
 def sign(a):
     if a > 0:
         return 1
@@ -31,7 +26,6 @@ def sign(a):
         return 0
 
 
-@jit(nopython=True, cache=True)
 def t4(c, d, l1, l2, l4, n, t1, t2, x, y, z):
     bx = l1 * sin(t2) * cos(t1)
     by = l1 * sin(t1) * sin(t2)
@@ -45,7 +39,6 @@ def t4(c, d, l1, l2, l4, n, t1, t2, x, y, z):
     return s * acos(dot(bc, de) / (l2 * l4))
 
 
-@jit(nopython=True, cache=True)
 def solve_fk(lengths, angles):
     l1, l2, l3, l4 = lengths
     t1, t2, t3, t4 = angles
@@ -82,7 +75,6 @@ def solve_fk(lengths, angles):
     return p0, p1, p2, p3, p4
 
 
-@jit(nopython=True, cache=True)
 def solve_ik(lengths, constraints):
     # Unpack
     l1, l2, l3, l4 = lengths

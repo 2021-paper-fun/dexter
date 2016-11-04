@@ -1,4 +1,4 @@
 from .maestro import Maestro
-from .main import Servo
+from .main import Servo, Arm
 
-__all__ = ['Maestro', 'Servo']
+__all__ = ['Maestro', 'Servo', 'Arm']
