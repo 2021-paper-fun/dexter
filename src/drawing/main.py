@@ -308,8 +308,12 @@ class Group(Transformable):
             elt_class = svg_classes.get(elt.tag, None)
 
             if elt_class is None:
-                logger.warning('No handler for element {}.'.format(elt.tag))
-                continue
+                logger.debug('No immediate handler for element {}.'.format(elt.tag))
+
+                if len(elt) > 0:
+                    elt_class = HeuristicGroup
+                else:
+                    continue
 
             # Instantiate elt associated class.
             item = elt_class(elt)
@@ -318,16 +322,24 @@ class Group(Transformable):
             item.matrix = self.matrix @ item.matrix
             item.viewport = self.viewport
 
-            # Recursively append if elt is a group.
-            if elt.tag == svg_ns + 'g':
+            # Recursively append if elt is a group or an unknown element.
+            if elt.tag == svg_ns + 'g' or elt_class is HeuristicGroup:
                 item.append(elt)
 
             # Ensure that group has valid elements.
-            if len(item.items) > 0:
+            if len(item) > 0:
                 self.items.append(item)
 
     def __repr__(self):
         return '<Group ' + self.id + '>: ' + repr(self.items)
+
+
+class HeuristicGroup(Group):
+    def __init__(self, elt):
+        super().__init__(elt)
+
+    def __repr__(self):
+        return '<HeuristicGroup ' + self.id + '>: ' + repr(self.items)
 
 
 class BaseGroup(Group):
@@ -674,6 +686,7 @@ class SVGCircle(SVGPath):
 
     def __repr__(self):
         return '<Circle ' + self.id + '>'
+
 
 class SVGRectangle(SVGPath):
     tag = 'rect'
