@@ -28,30 +28,23 @@ class Maestro:
             # Determine the operating system and port strings.
             # Command port is used for USB Dual Port mode.
             # Can automatically determine from a scan.
-            ports = list(list_ports.grep(r'(?i)1ffb:008b'))
+            ports = list(list_ports.grep(r'(?i)1ffb:008a')) + \
+                    list(list_ports.grep(r'(?i)1ffb:008b')) + \
+                    list(list_ports.grep(r'(?i)1ffb:008c'))
 
-            if os.name == 'nt':
-                if len(ports) == 2:
-                    if 'Command' in ports[0][1]:
-                        self.port = ports[0][0]
-                    else:
-                        self.port = ports[1][0]
+            if len(ports) == 2:
+                # Assuming nothing was messed with, the command port is the lower port.
+                if int(re.search(r'(\d+)$', ports[1][0]).group(0)) > int(re.search(r'(\d+)$', ports[0][0]).group(0)):
+                    self.port = ports[0][0]
                 else:
-                    raise ConnectionError('Unable to determine the Command port automatically. Please specify.')
+                    self.port = ports[1][0]
             else:
-                if len(ports) == 2:
-                    # Assuming nothing was messed with, the command port is the lower port.
-                    if int(re.search(r'(\d+)$', ports[1][0]).group(0)) > int(re.search(r'(\d+)$', ports[0][0]).group(0)):
-                        self.port = ports[0][0]
-                    else:
-                        self.port = ports[1][0]
-                else:
-                    raise ConnectionError('Unable to determine the Command port automatically. Please specify.')
+                raise ConnectionError('Unable to determine the Command port automatically. Please specify.')
 
         # Start a connection using pyserial.
         try:
             self.usb = serial.Serial(self.port, baudrate=baud, write_timeout=0)
-            logger.debug('Using command port "{}".'.format(self.usb.port))
+            logger.info('Using command port "{}".'.format(self.usb.port))
         except:
             raise ConnectionError('Unable to connect to servo controller at {}.'.format(self.port))
 
@@ -403,7 +396,7 @@ class Maestro:
 
         # Max speed.
         if t == 0:
-            t = max([abs(servo.target - servo.pwm) / servo.max_vel * 10 for servo in servos])
+            t = max(abs(servo.target - servo.pwm) / servo.max_vel * 10 for servo in servos)
 
         # Already at target.
         if t == 0:

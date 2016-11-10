@@ -4,6 +4,8 @@ from .usc import enum
 import numpy as np
 import math
 import time
+from queue import Queue
+from threading import Thread, Event
 import logging
 
 
@@ -109,6 +111,19 @@ class Servo:
 
         return rad
 
+    def reachable(self, rad):
+        """
+        Determines if an angle is reachable.
+        :param rad: The input angle.
+        :return: True if reachable, False otherwise.
+        """
+
+        try:
+            self.normalize(rad)
+            return True
+        except ServoError:
+            return False
+
     def get_position(self):
         """
         Get the servo's current position in radians.
@@ -152,12 +167,11 @@ class Arm:
 
         self.servos = [servo1, servo2, servo3, servo4]
         self.lengths = lengths
-        self.length = sum(lengths)
+        self.zero = (0, lengths[2], lengths[0] + lengths[1] + lengths[3])
+        self.length = np.linalg.norm(self.zero)
 
         self.fk_solver = fk_solver
         self.ik_solver = ik_solver
-
-        self.last_position = None
 
     def __getitem__(self, key):
         return self.servos[key]
@@ -165,19 +179,42 @@ class Arm:
     def __len__(self):
         return len(self.servos)
 
-    def target_point(self, point, solution=0):
+    def get_angles(self, point, solution=0):
         try:
-            angles = self.ik_solver(self.lengths, point)[solution]
+            # Interpolate phi from [3*pi/4, 5*pi/4]
+            r = np.linalg.norm(point) / self.length
+            if r > 1:
+                raise ValueError
+
+            phi = 5 * math.pi / 4 - math.pi / 2 * r
+
+            angles = self.ik_solver(self.lengths, (*point, phi))[solution]
 
             for servo, angle in zip(self.servos, angles):
+                if not servo.reachable(angle):
+                    logger.warning('Servo error at ({:.2f}, {:.2f}, {:.2f}) '
+                                   'with angles ({:.2f}, {:.2f}, {:.2f}, {:.2f}).'.format(*point, *angles))
+                    return None
+
+            return angles
+        except (ValueError, ZeroDivisionError):
+            logger.warning('IK error at ({:.2f}, {:.2f}, {:.2f}).'.format(*point))
+            return None
+
+    def target_angles(self, angles):
+        try:
+            for servo, angle in zip(self.servos, angles):
                 servo.set_target(angle)
+        except ServoError:
+            logger.error('Arm is unable to reach angles ({:.2f}, {:.2f}, {:.2f})'.format(*angles))
 
-            self.last_position = point
-        except (ServoError, ValueError, ZeroDivisionError):
-            logger.error('Arm is unable to reach point ({:.2f}, {:.2f}, {:.2f})'.format(*point))
-            return False
+    def get_position(self):
+        angles = tuple(servo.get_position() for servo in self.servos)
 
-        return True
+        try:
+            return self.fk_solver(self.lengths, angles)[-1]
+        except (ValueError, ZeroDivisionError):
+            return None
 
 
 class Dummy:
@@ -221,15 +258,143 @@ class Agility:
             logger.warning("Failed to attached to Maestro's command port. "
                            "If not debugging, consider this a fatal error.")
 
-        # Zero.
         self.zero()
 
-    def draw(self, drawing, v):
+    @staticmethod
+    def smooth(a, b, n):
+        """
+        Create a smooth transition from a to b in n steps.
+        :param a: The first array.
+        :param b: The second array.
+        :param n: The number of steps.
+        :return: An array from [a, b).
+        """
+
+        assert(a.shape == b.shape)
+        assert(n > 1)
+
+        # Compute delta.
+        delta = (b - a) / n
+
+        # Allocate n-1 with dimension d+1.
+        shape = (n, *a.shape)
+        inter = np.empty(shape)
+
+        for i in range(n):
+            inter[i] = a + i * delta
+
+        return inter
+
+    def draw(self, drawing, v, x, z, lift):
         """
         Draw a given drawing.
         :param drawing: A Drawing object.
         :param v: The maximum linear velocity in cm / s.
+        :param x: The x-offset.
+        :param z: The z-height at which the writing utensil contacts the paper.
+        :param lift: The height to lift
         """
+
+        # Create queue.
+        points_queue = []
+        dts_queue = []
+
+        # Add point helper function.
+        def add(point):
+            x1, y1, z1 = points_queue[-1]
+            x2, y2, z2 = point
+            dst = ((x2 - x1) ** 2 + (y2 - y1) ** 2 + (z2 - z1) ** 2) ** (1 / 2)
+            dt = dst / v * 1000
+
+            points_queue.append(point)
+            dts_queue.append(dt)
+
+        # Pixel to cm conversion factor.
+        px_cm = 2.54 / 96
+
+        # Begin path generation.
+        logger.info('Generating path.')
+
+        # Image size info.
+        width = drawing.viewport[0] / 2 * px_cm
+
+        # Generating the starting position.
+        p = drawing.points[0][0] * px_cm
+        p = (p.imag + x, p.real, z + lift)
+        points_queue.append(p)
+        dts_queue.append(1000)
+
+        for points in drawing.points:
+            # Convert to cm.
+            points *= px_cm
+
+            # Move up x, left viewport[0] / 2.
+            points += -width + 1j * x
+
+            # If not continuous and on paper, lift and move above next point.
+            lp = points_queue[-1]
+            fp = points[0]
+            fp = (fp.imag, fp.real, z)
+
+            if not all(np.isclose(lp, fp)) and lp[2] == z:
+                add((lp[0], lp[1], z + lift))
+                add((fp[0], fp[1], z + lift))
+
+            for point in points:
+                p = (point.imag, point.real, z)
+                add(p)
+
+        # Convert to angles.
+        logger.info('Converting to angles.')
+        angles_queue = [self.arm.get_angles(p) for p in points_queue]
+
+        # Check for out of bound.
+        if None in angles_queue:
+            logger.error('Path has one or more unreachable poses.')
+        else:
+            logger.info('Completed path generation.')
+
+        return angles_queue, dts_queue
+
+    def execute(self, angles, dts):
+        """
+        A worker to consume angles in queue.
+        :param angles: A list of angles.
+        :param dts: A list of dt.
+        """
+
+        # Assertion check.
+        assert len(dts) == len(angles)
+
+        # Get initial servo positions.
+        self.maestro.get_multiple_positions(self.arm)
+
+        # Execute.
+        for dt, angles in zip(dts, angles):
+            self.arm.target_angles(angles)
+            self.maestro.end_together(self.arm, dt)
+            self.wait()
+
+    def move_to(self, target, v):
+        """
+        Move the arm to a target with a given linear velocity.
+        :param target: The target tuple (x, y, z, phi).
+        :param v: The linear velocity in cm/s.
+        """
+
+        current = self.arm.get_position()
+
+        x1, y1, z1 = current
+        x2, y2, z2 = target[:3]
+        dst = ((x2 - x1) ** 2 + (y2 - y1) ** 2 + (z2 - z1) ** 2) ** (1 / 2)
+
+        dt = dst / v * 1000
+        angles = self.arm.get_angles(target)
+
+        if angles:
+            self.arm.target_angles(angles)
+            self.maestro.end_together(self.arm, dt)
+            self.wait()
 
     def configure(self):
         """
@@ -245,8 +410,8 @@ class Agility:
             channel.mode = ChannelMode.Servo
             channel.homeMode = HomeMode.Goto
             channel.home = servo.target
-            channel.minimum = (servo.min_pwm // 64) * 64
-            channel.maximum = -(-servo.max_pwm // 64) * 64
+            channel.minimum = (servo.min_qus // 64) * 64
+            channel.maximum = -(-servo.max_qus // 64) * 64
 
         self.usc.setUscSettings(settings, False)
         self.usc.reinitialize(500)
@@ -268,7 +433,7 @@ class Agility:
     def wait(self, servos=None):
         """
         Block until all servos have reached their targets.
-        :param servos: An array of servos. If None, checks if all servos have reached their targets.
+        :param servos: A list of servos. If None, checks if all servos have reached their targets.
         """
 
         while not self.is_at_target(servos):

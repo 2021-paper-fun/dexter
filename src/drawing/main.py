@@ -800,7 +800,7 @@ class Drawing:
         logger.info('Applying transformations.')
 
         matrix = SVGMatrix()
-        matrix = matrix.translate(-self.viewport[0] / 2, self.viewport[1])
+        matrix = matrix.translate(0, self.viewport[1])
         matrix = matrix.flip_y()
 
         width, height = self.svg.lengths(root.get('width'), root.get('height'))
@@ -865,12 +865,12 @@ class Drawing:
             ax.plot(np.real(segment), np.imag(segment), zorder=2, color='black')
 
         w, h = self.viewport
-        ax.add_patch(patches.Rectangle((-w / 2, 0), w, h,
+        ax.add_patch(patches.Rectangle((0, 0), w, h,
                                        facecolor='white', zorder=1, alpha=1, edgecolor='none'))
 
         border = 20
-        ax.set_xlim(-w / 2 - border, w / 2 + border)
-        ax.set_ylim(0 - border, h + border)
+        ax.set_xlim(-border, w + border)
+        ax.set_ylim(-border, h + border)
 
         plt.subplots_adjust(bottom=0.2)
         ax.set_axis_bgcolor('#FADBD8')
