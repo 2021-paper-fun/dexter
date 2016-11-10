@@ -28,9 +28,7 @@ class Maestro:
             # Determine the operating system and port strings.
             # Command port is used for USB Dual Port mode.
             # Can automatically determine from a scan.
-            ports = list(list_ports.grep(r'(?i)1ffb:008a')) + \
-                    list(list_ports.grep(r'(?i)1ffb:008b')) + \
-                    list(list_ports.grep(r'(?i)1ffb:008c'))
+            ports = list(list_ports.grep(r'(?i)1ffb:008(a|b|c)'))
 
             if len(ports) == 2:
                 # Assuming nothing was messed with, the command port is the lower port.
