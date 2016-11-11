@@ -650,6 +650,9 @@ class SVGEllipse(SVGPath):
         rx, ry = elt.get('rx'), elt.get('ry')
         cx, cy = elt.get('cx'), elt.get('cy')
 
+        if not ry:
+            ry = rx
+
         rx, ry, cx, cy = float(rx), float(ry), float(cx), float(cy)
 
         d = ['M', cx - rx, cy,
@@ -825,24 +828,35 @@ class Drawing:
 
     def _get_points(self):
         points = []
+        nan = np.nan + 1j * np.nan
 
         for path in self.paths:
             lengths = path.length_info()[1]
+            last_point = path[0].start
 
             for segment, length in zip(path, lengths):
+                if last_point != segment.start:
+                    points.append(nan)
+
                 n = length / self.dx
 
                 if n < self.min_points:
                     n = self.min_points
 
-                ts = np.linspace(0, 1, n)
+                ts = np.linspace(0, 1, n, endpoint=False)
+                points.extend(segment.point(t) for t in ts)
 
-                if n < 20:
-                    p = np.array([segment.point(t) for t in ts])
-                    points.append(p)
-                else:
-                    p = segment.points(ts)
-                    points.append(p)
+                last_point = segment.end
+
+            points.append(last_point)
+            points.append(nan)
+
+        # Perform out of bound filter.
+        points = np.array(points)
+
+        with np.errstate(invalid='ignore'):
+            points[(points.real > self.viewport[0]) | (points.real < 0) |
+                   (points.imag > self.viewport[1]) | (points.imag < 0)] = nan
 
         return points
 
@@ -861,8 +875,7 @@ class Drawing:
         fig, ax = plt.subplots()
         plt.axis('equal')
 
-        for segment in self.points:
-            ax.plot(np.real(segment), np.imag(segment), zorder=2, color='black')
+        ax.plot(np.real(self.points), np.imag(self.points), zorder=2, color='black')
 
         w, h = self.viewport
         ax.add_patch(patches.Rectangle((0, 0), w, h,

@@ -295,20 +295,6 @@ class Agility:
         :param lift: The height to lift
         """
 
-        # Create queue.
-        points_queue = []
-        dts_queue = []
-
-        # Add point helper function.
-        def add(point):
-            x1, y1, z1 = points_queue[-1]
-            x2, y2, z2 = point
-            dst = ((x2 - x1) ** 2 + (y2 - y1) ** 2 + (z2 - z1) ** 2) ** (1 / 2)
-            dt = dst / v * 1000
-
-            points_queue.append(point)
-            dts_queue.append(dt)
-
         # Pixel to cm conversion factor.
         px_cm = 2.54 / 96
 
@@ -318,43 +304,42 @@ class Agility:
         # Image size info.
         width = drawing.viewport[0] / 2 * px_cm
 
-        # Generating the starting position.
-        p = drawing.points[0][0] * px_cm
-        p = (p.imag + x, p.real, z + lift)
-        points_queue.append(p)
-        dts_queue.append(1000)
+        # Replace consecutive nans and leave only a single nan.
+        a = drawing.points
+        b = np.roll(a, 1)
+        remove = np.where(~(np.isfinite(a) | np.isfinite(b)))
+        a = np.delete(a, remove)
 
-        for points in drawing.points:
-            # Convert to cm.
-            points *= px_cm
+        # Convert points to 3D. Real component will by y.
+        points = np.empty((len(a), 3))
+        points[:, 0] = np.imag(a) * px_cm
+        points[:, 1] = np.real(a) * px_cm
+        points[:, 2] = z
 
-            # Move up x, left viewport[0] / 2.
-            points += -width + 1j * x
+        # Move up x and left by viewport[0] / 2
+        points += (x, -width, 0)
 
-            # If not continuous and on paper, lift and move above next point.
-            lp = points_queue[-1]
-            fp = points[0]
-            fp = (fp.imag, fp.real, z)
+        # Replace all nans with a lift.
+        loc = np.where(~np.isfinite(points))[0]
+        points[loc] = points[loc - 1] + (0, 0, lift)
 
-            if not all(np.isclose(lp, fp)) and lp[2] == z:
-                add((lp[0], lp[1], z + lift))
-                add((fp[0], fp[1], z + lift))
-
-            for point in points:
-                p = (point.imag, point.real, z)
-                add(p)
+        # Compute velocity in ms.
+        diff = np.diff(points, axis=0)
+        distances = np.linalg.norm(diff, axis=1)
+        dts = distances / v * 1000
+        dts = np.hstack((0, dts))
 
         # Convert to angles.
         logger.info('Converting to angles.')
-        angles_queue = [self.arm.get_angles(p) for p in points_queue]
+        angles = [self.arm.get_angles(p) for p in points]
 
         # Check for out of bound.
-        if None in angles_queue:
+        if None in angles:
             logger.error('Path has one or more unreachable poses.')
         else:
             logger.info('Completed path generation.')
 
-        return angles_queue, dts_queue
+        return angles, dts
 
     def execute(self, angles, dts):
         """

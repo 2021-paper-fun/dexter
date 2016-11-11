@@ -48,9 +48,6 @@ class Line:
         distance = self.end - self.start
         return self.start + distance * t
 
-    def points(self, t):
-        return self.point(t)
-
     def length(self, error=None, min_depth=None):
         """returns the length of the line segment between t0 and t1."""
         return abs(self.end - self.start)
@@ -76,9 +73,6 @@ class QuadraticBezier:
 
     def point(self, t):
         return (1 - t) ** 2 * self.start + 2 * (1 - t) * t * self.control + t ** 2 * self.end
-
-    def points(self, t):
-        return self.point(t)
 
     def length(self, error=None, min_depth=None):
         if self.length_info['bpoints'] == self.bpoints():
@@ -151,9 +145,6 @@ class CubicBezier:
                 3 * (self.start + self.control2) - 6 * self.control1 + t * (
                     -self.start + 3 * (self.control1 - self.control2) + self.end
                 )))
-
-    def points(self, t):
-        return self.point(t)
 
     def length(self, error=LENGTH_ERROR, min_depth=LENGTH_MIN_DEPTH):
         """Calculate the length of the path up to a certain position"""
@@ -313,18 +304,6 @@ class Arc:
 
         x = rx * cosphi * cos(angle) - ry * sinphi * sin(angle) + self.center.real
         y = rx * sinphi * cos(angle) + ry * cosphi * sin(angle) + self.center.imag
-
-        return x + 1j * y
-
-    def points(self, t):
-        angle = np.radians(self.theta + t * self.delta)
-        cosphi = self.rot_matrix.real
-        sinphi = self.rot_matrix.imag
-        rx = self.radius.real
-        ry = self.radius.imag
-
-        x = rx * cosphi * np.cos(angle) - ry * sinphi * np.sin(angle) + self.center.real
-        y = rx * sinphi * np.cos(angle) + ry * cosphi * np.sin(angle) + self.center.imag
 
         return x + 1j * y
 
