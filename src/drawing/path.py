@@ -1,7 +1,6 @@
 from math import sqrt, cos, sin, acos, degrees, radians, log, pi, atan2
 from cmath import exp
 from scipy.integrate import quad
-import numpy as np
 
 
 LENGTH_MIN_DEPTH = 5

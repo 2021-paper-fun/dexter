@@ -43,10 +43,17 @@ class Servo:
 
         Setting Direction
         =================
-        If the servo points in a positive axis and is grounded, direction is 1.
-        If the servo points in a positive axis and is not grounded, direction is -1.
-        If the servo points in a negative axis and is grounded, direction is -1.
-        If the servo points in a negative axis and is not grounded, direction is 1.
+        If higher PWM corresponds to counterclockwise:
+            If the servo points in a positive axis and is grounded, direction is 1.
+            If the servo points in a positive axis and is not grounded, direction is -1.
+            If the servo points in a negative axis and is grounded, direction is -1.
+            If the servo points in a negative axis and is not grounded, direction is 1.
+
+        If higher PWM corresponds to clockwise:
+            If the servo points in a positive axis and is grounded, direction is -1.
+            If the servo points in a positive axis and is not grounded, direction is 1.
+            If the servo points in a negative axis and is grounded, direction is 1.
+            If the servo points in a negative axis and is not grounded, direction is -1.
         """
 
         self.channel = channel
@@ -179,34 +186,13 @@ class Arm:
     def __len__(self):
         return len(self.servos)
 
-    def get_angles(self, point, solution=0):
+    def target(self, constraints, solution=0):
         try:
-            # Interpolate phi from [3*pi/4, 5*pi/4]
-            r = np.linalg.norm(point) / self.length
-            if r > 1:
-                raise ValueError
-
-            phi = 5 * math.pi / 4 - math.pi / 2 * r
-
-            angles = self.ik_solver(self.lengths, (*point, phi))[solution]
-
-            for servo, angle in zip(self.servos, angles):
-                if not servo.reachable(angle):
-                    logger.warning('Servo error at ({:.2f}, {:.2f}, {:.2f}) '
-                                   'with angles ({:.2f}, {:.2f}, {:.2f}, {:.2f}).'.format(*point, *angles))
-                    return None
-
-            return angles
-        except (ValueError, ZeroDivisionError):
-            logger.warning('IK error at ({:.2f}, {:.2f}, {:.2f}).'.format(*point))
-            return None
-
-    def target_angles(self, angles):
-        try:
+            angles = self.ik_solver(self.lengths, constraints)[solution]
             for servo, angle in zip(self.servos, angles):
                 servo.set_target(angle)
-        except ServoError:
-            logger.error('Arm is unable to reach angles ({:.2f}, {:.2f}, {:.2f})'.format(*angles))
+        except (ValueError, ZeroDivisionError, ServoError):
+            logger.error('Arm is unable to reach constraint ({:.2f}, {:.2f}, {:.2f}, {:.2f}).'.format(*constraints))
 
     def get_position(self):
         angles = tuple(servo.get_position() for servo in self.servos)
@@ -311,54 +297,71 @@ class Agility:
         a = np.delete(a, remove)
 
         # Convert points to 3D. Real component will by y.
-        points = np.empty((len(a), 3))
+        points = np.empty((a.shape[0], 3))
         points[:, 0] = np.imag(a) * px_cm
-        points[:, 1] = np.real(a) * px_cm
+        points[:, 1] = np.real(a) * px_cm * -1
         points[:, 2] = z
 
-        # Move up x and left by viewport[0] / 2
-        points += (x, -width, 0)
+        # Move up x and left by viewport[0] / 2.
+        points += (x, width, 0)
 
-        # Replace all nans with a lift.
-        loc = np.where(~np.isfinite(points))[0]
+        # Replace all nans with a lift and insert a move right after.
+        loc = np.where(~np.isfinite(points[:, 0]))[0]
         points[loc] = points[loc - 1] + (0, 0, lift)
+        points = np.insert(points, loc + 1, points[(loc + 1) % len(points)] + (0, 0, lift), axis=0)
 
         # Compute velocity in ms.
         diff = np.diff(points, axis=0)
         distances = np.linalg.norm(diff, axis=1)
         dts = distances / v * 1000
-        dts = np.hstack((0, dts))
+        dts = np.hstack((2000, dts))
 
-        # Convert to angles.
-        logger.info('Converting to angles.')
-        angles = [self.arm.get_angles(p) for p in points]
+        # Compute phi.
+        r = np.linalg.norm(points, axis=1) / self.arm.length
+        phi = 5 * math.pi / 4 - math.pi / 2 * r
+        constraints = np.empty((points.shape[0], 4))
+        constraints[:, :3] = points
+        constraints[:, 3] = phi
 
-        # Check for out of bound.
-        if None in angles:
-            logger.error('Path has one or more unreachable poses.')
-        else:
-            logger.info('Completed path generation.')
+        logger.info('Completed path generation.')
 
-        return angles, dts
+        return constraints, dts
 
-    def execute(self, angles, dts):
+    def execute(self, constraints, dts, threshold=50):
         """
-        A worker to consume angles in queue.
-        :param angles: A list of angles.
+        Execute given angles and times.
+        :param constraints: A list of constraints.
         :param dts: A list of dt.
+        :param threshold: Time threshold to interpolate in ms.
         """
 
         # Assertion check.
-        assert len(dts) == len(angles)
+        assert len(dts) == len(constraints)
+
+        # Compute length.
+        length = len(constraints)
 
         # Get initial servo positions.
         self.maestro.get_multiple_positions(self.arm)
 
         # Execute.
-        for dt, angles in zip(dts, angles):
-            self.arm.target_angles(angles)
-            self.maestro.end_together(self.arm, dt)
-            self.wait()
+        for i in range(length):
+            constraint = constraints[i]
+            dt = dts[i]
+
+            if dt > threshold and i != 0:
+                n = int(dt // threshold + 1)
+                c = self.smooth(constraints[i - 1], constraint, n)
+                dt /= n
+
+                for constraint in c:
+                    self.arm.target(constraint)
+                    self.maestro.end_together(self.arm, dt, update=True)
+                    self.wait()
+            else:
+                self.arm.target(constraint)
+                self.maestro.end_together(self.arm, dt, update=True)
+                self.wait()
 
     def move_to(self, target, v):
         """
@@ -374,12 +377,10 @@ class Agility:
         dst = ((x2 - x1) ** 2 + (y2 - y1) ** 2 + (z2 - z1) ** 2) ** (1 / 2)
 
         dt = dst / v * 1000
-        angles = self.arm.get_angles(target)
 
-        if angles:
-            self.arm.target_angles(angles)
-            self.maestro.end_together(self.arm, dt)
-            self.wait()
+        self.arm.target(target)
+        self.maestro.end_together(self.arm, dt)
+        self.wait()
 
     def configure(self):
         """
@@ -412,7 +413,7 @@ class Agility:
         for servo in self.arm:
             servo.set_target(0)
 
-        self.maestro.end_together(self.arm)
+        self.maestro.end_together(self.arm, 2000)
         self.wait()
 
     def wait(self, servos=None):

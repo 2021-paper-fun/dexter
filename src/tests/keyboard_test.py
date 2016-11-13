@@ -3,6 +3,7 @@ from agility import Agility
 from config import Android
 from tkinter import Tk, Frame
 from threading import Thread
+from math import pi
 import time
 
 
@@ -42,7 +43,7 @@ class Control:
         return self.x, self.y, self.z
 
 
-control = Control(arm, 0.1)
+control = Control(arm, 0.2)
 
 
 # Define threaded function.
@@ -54,7 +55,7 @@ def run():
 
         if target != last_target:
             logger.info('Moving arm to ({:.2f}, {:.2f}, {:.2f}).'.format(*target))
-            agility.move_to(target, 5)
+            agility.move_to((*target, pi), 5)
             last_target = target
 
         time.sleep(0.001)
