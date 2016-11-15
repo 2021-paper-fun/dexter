@@ -864,10 +864,10 @@ class Drawing:
         return sum(x.length_info()[0] for x in self.paths)
 
     def bounding_box(self):
-        x_min = min(np.real(path).min() for path in self.points)
-        y_min = min(np.imag(path).min() for path in self.points)
-        x_max = max(np.real(path).max() for path in self.points)
-        y_max = max(np.imag(path).max() for path in self.points)
+        x_min = np.real(self.points).min()
+        y_min = np.imag(self.points).min()
+        x_max = np.real(self.points).max()
+        y_max = np.imag(self.points).max()
 
         return x_min, y_min, x_max, y_max
 
