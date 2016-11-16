@@ -23,7 +23,8 @@ class ServoError(Exception):
 class Servo:
     tau = 2 * math.pi
 
-    def __init__(self, channel, min_ang, max_ang, min_pwm, max_pwm, max_vel, bias=0, direction=1):
+    def __init__(self, channel, min_ang, max_ang, min_pwm, max_pwm, max_vel,
+                 bias=0, direction=1, period=20, multiplier=1):
         """
         Creates a servo object.
         :param channel: The channel number beginning with 0.
@@ -34,6 +35,8 @@ class Servo:
         :param max_vel: The maximum velocity of the servo. (0, 1000] (ms / 60 deg).
         :param bias: The bias for the servo. [-360, 360] (degrees).
         :param direction: The direction, either -1 or 1.
+        :param period: The period of each pulse (ms).
+        :param multiplier: The multiplier for period.
 
         Setting Bias
         ============
@@ -65,6 +68,8 @@ class Servo:
 
         self.bias = math.radians(bias)
         self.direction = direction
+        self.period = period
+        self.multiplier = multiplier
 
         # Dynamic current data.
         self.pwm = 0
@@ -78,8 +83,13 @@ class Servo:
         # Compute constants.
         self.k_ang2qus = (self.max_qus - self.min_qus) / (self.max_rad - self.min_rad)
         self.k_qus2ang = (self.max_rad - self.min_rad) / (self.max_qus - self.min_qus)
-        self.k_vel2mae = (60 * self.k_ang2qus) / self.max_vel * 10
-        self.k_mae2vel = self.max_vel / ((60 * self.k_ang2qus) * 10)
+
+        if self.period == 20:
+            self.k_vel = 10
+        elif self.period < 20:
+            self.k_vel = self.period
+        else:
+            self.k_vel = self.period / 2
 
     def zero(self):
         """
@@ -337,31 +347,14 @@ class Agility:
 
         # Assertion check.
         assert len(dts) == len(constraints)
-
-        # Compute length.
-        length = len(constraints)
-
+        
         # Get initial servo positions.
         self.maestro.get_multiple_positions(self.arm)
 
         # Execute.
-        for i in range(length):
-            constraint = constraints[i]
-            dt = dts[i]
-
-            if dt > threshold and i != 0:
-                n = int(dt // threshold + 1)
-                c = self.smooth(constraints[i - 1], constraint, n)
-                dt /= n
-
-                for constraint in c:
-                    self.arm.target(constraint)
-                    self.maestro.end_together(self.arm, dt, update=True)
-                    self.wait()
-            else:
-                self.arm.target(constraint)
-                self.maestro.end_together(self.arm, dt, update=True)
-                self.wait()
+        for constraint, dt in zip(constraints, dts):
+            self.arm.target(constraint)
+            self.sync(self.arm, dt)
 
     def move_to(self, target, v):
         """
@@ -380,7 +373,7 @@ class Agility:
 
         self.arm.target(target)
         self.maestro.end_together(self.arm, dt)
-        self.wait()
+        self.wait(self.arm)
 
     def configure(self):
         """
@@ -390,14 +383,38 @@ class Agility:
         settings = self.usc.getUscSettings()
         settings.serialMode = uscSerialMode.SERIAL_MODE_USB_DUAL_PORT
 
+        multipliers = set(servo.multiplier for servo in self.arm)
+        multipliers.remove(1)
+
+        if len(multipliers) > 1:
+            raise ValueError('More than one multiplier found.')
+        elif len(multipliers) == 1:
+            settings.servoMultiplier = multipliers.pop()
+        else:
+            settings.servoMultiplier = 1
+
+        empty_channels = list(range(len(settings)))
+
         for servo in self.arm:
             servo.zero()
+            del empty_channels[servo.channel]
+
             channel = settings.channelSettings[servo.channel]
-            channel.mode = ChannelMode.Servo
+
+            if servo.multiplier != 1:
+                channel.mode = ChannelMode.ServoMultiplied
+            else:
+                channel.mode = ChannelMode.Servo
+
             channel.homeMode = HomeMode.Goto
             channel.home = servo.target
             channel.minimum = (servo.min_qus // 64) * 64
             channel.maximum = -(-servo.max_qus // 64) * 64
+
+        for c in empty_channels:
+            channel = settings.channelSettings[c]
+            channel.mode = ChannelMode.Output
+            channel.homeMode = HomeMode.Off
 
         self.usc.setUscSettings(settings, False)
         self.usc.reinitialize(500)
@@ -413,26 +430,47 @@ class Agility:
         for servo in self.arm:
             servo.set_target(0)
 
-        self.maestro.end_together(self.arm, 2000)
-        self.wait()
+        self.sync(self.arm, 2000)
 
-    def wait(self, servos=None):
+    def sync(self, servos, t):
+        """
+        Ensure that the given servos reach their target in a given time.
+        Blocks until completion.
+        :param servos: A list of servos.
+        :param t: The time in ms for the operation. Set to 0 for max speed.
+        """
+
+        if t == 0:
+            t = max(abs(servo.target - servo.pwm) / servo.max_vel * servo.period for servo in servos)
+
+        end = time.time() + t / 1000
+        self.maestro.end_together(servos, t, update=True)
+
+        while not self.is_at_target(servos):
+            dt = (end - time.time()) * 1000
+
+            if dt < 0:
+                dt = 0
+
+            self.maestro.end_together(servos, dt, update=True)
+
+    def wait(self, servos):
         """
         Block until all servos have reached their targets.
-        :param servos: A list of servos. If None, checks if all servos have reached their targets.
+        :param servos: A list of servos.
         """
 
         while not self.is_at_target(servos):
             time.sleep(0.001)
 
-    def is_at_target(self, servos=None):
+    def is_at_target(self, servos):
         """
-        Check if servos are at their target.
-        :param servos: One or more servo objects. If None, checks if all servos have reached their targets.
+        Check if servos are at their target. Efficient when used on the whole arm.
+        :param servos: One or more servo objects.
         :return: True if all servos are at their targets, False otherwise.
         """
 
-        if servos is None:
+        if isinstance(servos, Arm):
             return not self.maestro.get_moving_state()
         elif isinstance(servos, Servo):
             self.maestro.get_position(servos)
