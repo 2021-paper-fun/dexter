@@ -347,7 +347,7 @@ class Agility:
 
         # Assertion check.
         assert len(dts) == len(constraints)
-        
+
         # Get initial servo positions.
         self.maestro.get_multiple_positions(self.arm)
 
@@ -393,11 +393,18 @@ class Agility:
         else:
             settings.servoMultiplier = 1
 
+        periods = set(servo.period for servo in self.arm)
+
+        if len(periods) != 1:
+            raise ValueError('More than one period found.')
+        else:
+            settings.miniMaestroServoPeriod = periods.pop() * 4000
+
         empty_channels = list(range(len(settings)))
 
         for servo in self.arm:
             servo.zero()
-            del empty_channels[servo.channel]
+            empty_channels.remove(servo.channel)
 
             channel = settings.channelSettings[servo.channel]
 
@@ -463,6 +470,9 @@ class Agility:
         while not self.is_at_target(servos):
             time.sleep(0.001)
 
+    def is_moving(self):
+        return self.maestro.get_moving_state()
+
     def is_at_target(self, servos):
         """
         Check if servos are at their target. Efficient when used on the whole arm.
@@ -470,9 +480,7 @@ class Agility:
         :return: True if all servos are at their targets, False otherwise.
         """
 
-        if isinstance(servos, Arm):
-            return not self.maestro.get_moving_state()
-        elif isinstance(servos, Servo):
+        if isinstance(servos, Servo):
             self.maestro.get_position(servos)
 
             if servos.at_target():
