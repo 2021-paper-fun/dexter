@@ -9,7 +9,7 @@ import logging
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.widgets import Button
-from drawing.path import *
+from .path import *
 import xml.etree.ElementTree as etree
 
 

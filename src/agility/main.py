@@ -4,8 +4,6 @@ from .usc import enum
 import numpy as np
 import math
 import time
-from queue import Queue
-from threading import Thread, Event
 import logging
 
 
@@ -37,6 +35,11 @@ class Servo:
         :param direction: The direction, either -1 or 1.
         :param period: The period of each pulse (ms).
         :param multiplier: The multiplier for period.
+
+        Angle Range
+        ===========
+        Different servo brands have different directions of spin.
+        Higher PWM always corresponds to the positive direction.
 
         Setting Bias
         ============
@@ -381,7 +384,8 @@ class Agility:
         """
 
         settings = self.usc.getUscSettings()
-        settings.serialMode = uscSerialMode.SERIAL_MODE_USB_DUAL_PORT
+        settings.serialMode = uscSerialMode.SERIAL_MODE_USB_CHAINED
+        settings.enableCrc = False
 
         multipliers = set(servo.multiplier for servo in self.arm)
         multipliers.remove(1)

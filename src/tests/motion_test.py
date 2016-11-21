@@ -4,4 +4,4 @@ from agility import Agility
 from util import logger
 
 agility = Agility(Android.arm)
-
+# agility.configure()

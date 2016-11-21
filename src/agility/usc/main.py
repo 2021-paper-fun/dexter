@@ -410,6 +410,13 @@ class Usc:
                                  self.normalSpeedToExponentialSpeed(setting.speed))
             self.setRawParameter(self.specifyServo(uscParameter.PARAMETER_SERVO0_ACCELERATION, i), setting.acceleration)
 
+        if not self.isMiniMaestro:
+            self.setRawParameter(uscParameter.PARAMETER_IO_MASK_C, ioMask)
+            self.setRawParameter(uscParameter.PARAMETER_OUTPUT_MASK_C, outputMask)
+        else:
+            for i in range(6):
+                self.setRawParameter(uscParameter.PARAMETER_CHANNEL_MODES_0_3 + i, channelModeBytes[i])
+
         if newScript:
             self.loadProgram(settings.bytecodeProgram, CRC=True)
 

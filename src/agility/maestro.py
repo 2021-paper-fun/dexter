@@ -352,7 +352,7 @@ class Maestro:
 
         # Max speed.
         if t == 0:
-            t = abs(servo.target - servo.pwm) / servo.max_vel * 10
+            t = abs(servo.target - servo.pwm) / servo.max_vel * servo.k_vel
 
         # Already at target.
         if t == 0:
@@ -367,7 +367,7 @@ class Maestro:
 
         # Compute velocity as a change in 0.25us PWM / 10 ms.
         delta = abs(servo.target - servo.pwm)
-        vel = int(round(delta / t * 10))
+        vel = int(round(delta / t * servo.k_vel))
 
         # Set velocity.
         ins = self.set_speed(servo, vel, send=False)
