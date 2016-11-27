@@ -99,4 +99,7 @@ ENV/
 *.bmp
 
 # Executables
-*.exe
+*.exe\
+
+# PID
+*.pid
