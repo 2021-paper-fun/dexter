@@ -347,6 +347,7 @@ class Agility:
         :param dts: A list of dt.
         :param threshold: Time threshold to interpolate in ms.
         :param event: Threading Event for early exit.
+        :return: True if completed. False if exited early.
         """
 
         # Assertion check.
@@ -361,7 +362,9 @@ class Agility:
             self.sync(self.arm, dt)
 
             if event is not None and event.is_set():
-                break
+                return False
+
+        return True
 
     def move_to(self, target, v):
         """

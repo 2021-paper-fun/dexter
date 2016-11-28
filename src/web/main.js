@@ -152,6 +152,9 @@ var commands = {
     },
     '(dexter) info': function () {
         control.call('info');
+    },
+    '(dexter) zero': function () {
+        control.call('zero');
     }
 };
 

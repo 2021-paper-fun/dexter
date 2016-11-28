@@ -127,7 +127,10 @@ class Cerebral(ApplicationSession):
 
         angles, dts = self.agility.draw(drawing, self.params['speed'], self.params['forward'], -7.6, self.params['lift'])
         self.event.clear()
-        self.agility.execute(angles, dts, event=self.event)
+        completed = self.agility.execute(angles, dts, event=self.event)
+
+        if not completed:
+            self.agility.zero()
 
         self.working = False
 
@@ -137,7 +140,23 @@ class Cerebral(ApplicationSession):
             if not self.working:
                 self.working = True
                 self.run(self._draw_weather)
-                return 'Give me a moment.'
+                return 'Drawing the weather.'
+            else:
+                return 'I am currently busy.'
+        else:
+            return 'System is not initialized.'
+
+    def _zero(self):
+        self.agility.zero()
+        self.working = False
+
+    @wamp.register('arm.zero')
+    async def zero(self):
+        if self.initialized:
+            if not self.working:
+                self.working = True
+                self.run(self._zero)
+                return 'Zeroing the arm.'
             else:
                 return 'I am currently busy.'
         else:
@@ -145,8 +164,11 @@ class Cerebral(ApplicationSession):
 
     @wamp.register('arm.stop')
     async def stop(self):
-        self.event.set()
-        return 'Stopping.'
+        if self.working:
+            self.event.set()
+            return 'Stopping.'
+        else:
+            return 'I cannot stop doing nothing.'
 
     @wamp.register('arm.info')
     async def info(self):
