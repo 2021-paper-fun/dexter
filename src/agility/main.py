@@ -257,7 +257,7 @@ class Agility:
             logger.warning("Failed to attached to Maestro's command port. "
                            "If not debugging, consider this a fatal error.")
 
-        self.zero()
+        # self.zero()
 
     @staticmethod
     def smooth(a, b, n):
@@ -340,12 +340,13 @@ class Agility:
 
         return constraints, dts
 
-    def execute(self, constraints, dts, threshold=50):
+    def execute(self, constraints, dts, threshold=50, event=None):
         """
         Execute given angles and times.
         :param constraints: A list of constraints.
         :param dts: A list of dt.
         :param threshold: Time threshold to interpolate in ms.
+        :param event: Threading Event for early exit.
         """
 
         # Assertion check.
@@ -358,6 +359,9 @@ class Agility:
         for constraint, dt in zip(constraints, dts):
             self.arm.target(constraint)
             self.sync(self.arm, dt)
+
+            if event is not None and event.is_set():
+                break
 
     def move_to(self, target, v):
         """

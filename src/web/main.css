@@ -1,0 +1,7 @@
+.terminal, .cmd {
+    font-family: monospace;
+    color: #eee;
+    background-color: #000;
+    font-size: 12px;
+    line-height: 14px;
+}

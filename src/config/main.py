@@ -14,3 +14,10 @@ class Android:
     lengths = (18.0, 18.0, 0.82 + diameter / 2, 2.5 + height)
 
     arm = Arm(servo1, servo2, servo3, servo4, lengths, solve_fk, solve_ik)
+
+
+class Crossbar:
+    ip = '127.0.0.1'
+    realm = 'realm1'
+    authid = 'arm'
+    ticket = '5gRZ_E4YCE4!E$jX'

@@ -74,9 +74,15 @@
                 "auto_ping_interval": 5000
               },
               "auth": {
+                "ticket": {
                   "type": "static",
+                  "principals": {
+                    "controller": {
+                      "ticket": "64=t5tQPnGLh+PcK",
                       "role": "full"
                     },
+                    "arm": {
+                      "ticket": "5gRZ_E4YCE4!E$jX",
                       "role": "full"
                     }
                   }

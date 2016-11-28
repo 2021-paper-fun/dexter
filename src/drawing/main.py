@@ -772,7 +772,7 @@ class Drawing:
 
         assert self.min_points >= 2
 
-        logger.info('Loading SVG file "{}".'.format(self.file))
+        logger.info('Loading SVG file "{}."'.format(self.file))
         tree = etree.parse(file)
         root = tree.getroot()
 
