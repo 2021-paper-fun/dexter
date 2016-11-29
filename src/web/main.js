@@ -34,8 +34,9 @@ function echo2(dt, text) {
     term.echo('[[;#ff7f00;#000]&#91;' + dt + '&#93;] ' + text);
 }
 
-// System message.
+// System messages.
 echo('Starting system.');
+echo('Public IP is ' + ip + '.');
 
 
 // WAMP.
