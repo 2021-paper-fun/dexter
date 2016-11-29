@@ -5,10 +5,10 @@ var term = $('body').terminal(
             try {
                 var result = window.eval(command);
                 if (result !== undefined) {
-                    term.echo(new String(result));
+                    term.echo(String(result));
                 }
             } catch (e) {
-                term.error(new String(e));
+                term.error(String(e));
             }
         } else {
             term.echo('');
@@ -158,6 +158,9 @@ var commands = {
     '(dexter) draw today\'s weather': function () {
         control.call('draw_weather');
     },
+    '(dexter) ready': function () {
+        control.call('ready');
+    },
     '(dexter) stop': function () {
         control.call('stop');
     },
@@ -175,6 +178,9 @@ var commands = {
     },
     '(dexter) set :parameter :float': function (parameter, float) {
         control.call('set_parameter', [parameter, float]);
+    },
+    '(dexter) save point :num': function (num) {
+        control.call('save_point', [num]);
     }
 };
 

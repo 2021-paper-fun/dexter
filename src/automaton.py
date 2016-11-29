@@ -25,6 +25,13 @@ class Numeric:
         except ValueError:
             return None
 
+    @staticmethod
+    def to_int(num):
+        try:
+            return int(num)
+        except ValueError:
+            return None
+
 
 class Weather:
     def __init__(self):
@@ -78,6 +85,7 @@ class Cerebral(ApplicationSession):
         self.work_lock = Lock()
         self.event = Event()
 
+        self.points = [None, None, None]
         self.params = {
             'lift': 4.0,
             'speed': 10.0,
@@ -126,6 +134,15 @@ class Cerebral(ApplicationSession):
     ########################
     # Main remote functions.
     ########################
+
+    @wamp.register('arm.ready')
+    async def ready(self):
+        if self.initialized:
+            message = 'I\'m all good to go.'
+        else:
+            message = 'Give me a moment. I\'m currently initializing.'
+
+        self.call('controller.speak', message)
 
     def _draw_weather(self):
         svg = self.weather.get_icon()
@@ -270,6 +287,22 @@ class Cerebral(ApplicationSession):
                 self.work_lock.release()
         else:
             self.call('controller.speak', 'I am currently busy.')
+
+    def _save_point(self, num):
+        num = Numeric.to_int(num)
+
+        if num is None or num < 1 or num > 3:
+            return self.call('controller.speak', 'Invalid index.')
+
+        self.points[num - 1] = self.agility.arm.get_position()
+
+    @wamp.register('arm.save_point')
+    async def save_point(self, num):
+        if not self.initialized:
+            return self.call('controller.speak', 'Please wait. System is not initialized.')
+
+        self.call('controller.speak', 'Saving current location.')
+        await self.run(self._save_point, num)
 
 if __name__ == '__main__':
     # Configure SSL.
