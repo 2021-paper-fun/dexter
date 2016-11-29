@@ -204,8 +204,12 @@ class Arm:
             angles = self.ik_solver(self.lengths, constraints)[solution]
             for servo, angle in zip(self.servos, angles):
                 servo.set_target(angle)
+
+            return True
         except (ValueError, ZeroDivisionError, ServoError):
             logger.error('Arm is unable to reach constraint ({:.2f}, {:.2f}, {:.2f}, {:.2f}).'.format(*constraints))
+
+        return False
 
     def get_position(self):
         angles = tuple(servo.get_position() for servo in self.servos)
@@ -294,6 +298,9 @@ class Agility:
         :param lift: The height to lift
         """
 
+        assert v > 0
+        assert lift > 0
+
         # Pixel to cm conversion factor.
         px_cm = 2.54 / 96
 
@@ -340,12 +347,11 @@ class Agility:
 
         return constraints, dts
 
-    def execute(self, constraints, dts, threshold=50, event=None):
+    def execute(self, constraints, dts, event=None):
         """
         Execute given angles and times.
         :param constraints: A list of constraints.
         :param dts: A list of dt.
-        :param threshold: Time threshold to interpolate in ms.
         :param event: Threading Event for early exit.
         :return: True if completed. False if exited early.
         """
@@ -366,24 +372,49 @@ class Agility:
 
         return True
 
-    def move_to(self, target, v):
+    def move_relative(self, delta, phi, v):
         """
-        Move the arm to a target with a given linear velocity.
-        :param target: The target tuple (x, y, z, phi).
-        :param v: The linear velocity in cm/s.
+        Move the arm relative to its current position.
+        :param delta: The tuple (dx, dy, dz).
+        :param phi: The angle phi.
+        :param v: The linear velocity in cm/s
         """
 
+        assert v > 0
+
+        self.maestro.get_multiple_positions(self.arm)
         current = self.arm.get_position()
 
         x1, y1, z1 = current
-        x2, y2, z2 = target[:3]
+        dx, dy, dz = delta
+
+        dst = (dx ** 2 + dy ** 2 + dz ** 2) ** (1 / 2)
+        dt = dst / v * 1000
+
+        if self.arm.target((x1 + dx, y1 + dy, z1 + dz, phi)):
+            self.sync(self.arm, dt)
+
+    def move_absolute(self, target, phi, v):
+        """
+        Move the arm to a target with a given linear velocity.
+        :param target: The target tuple (x, y, z).
+        :param phi: The angle phi.
+        :param v: The linear velocity in cm/s.
+        """
+
+        assert v > 0
+
+        self.maestro.get_multiple_positions(self.arm)
+        current = self.arm.get_position()
+
+        x1, y1, z1 = current
+        x2, y2, z2 = target
         dst = ((x2 - x1) ** 2 + (y2 - y1) ** 2 + (z2 - z1) ** 2) ** (1 / 2)
 
         dt = dst / v * 1000
 
-        self.arm.target(target)
-        self.maestro.end_together(self.arm, dt)
-        self.wait(self.arm)
+        if self.arm.target((x2, y2, z2, phi)):
+            self.sync(self.arm, dt)
 
     def configure(self):
         """

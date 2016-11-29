@@ -26,4 +26,4 @@ for c in text:
     constraints.append(char[c] + (0, pi))
 
 for constraint in constraints:
-    agility.move_to(constraint, 3)
+    agility.move_absolute(constraint, 3)

@@ -1,7 +1,8 @@
 import asyncio
 import ssl
-from threading import Event
+from threading import Event, Lock
 import os
+from math import pi
 import pyowm
 import requests
 
@@ -14,6 +15,15 @@ from autobahn import wamp
 from autobahn.asyncio.wamp import ApplicationSession
 from util import ApplicationRunner
 from concurrent.futures import ThreadPoolExecutor
+
+
+class Numeric:
+    @staticmethod
+    def to_float(num):
+        try:
+            return float(num)
+        except ValueError:
+            return None
 
 
 class Weather:
@@ -65,13 +75,13 @@ class Cerebral(ApplicationSession):
         self.agility = None
 
         self.initialized = False
-        self.working = False
+        self.work_lock = Lock()
         self.event = Event()
 
         self.params = {
-            'lift': 4,
-            'speed': 10,
-            'forward': 6
+            'lift': 4.0,
+            'speed': 10.0,
+            'offset': 6.0
         }
 
         super().__init__(*args, **kwargs)
@@ -125,59 +135,141 @@ class Cerebral(ApplicationSession):
         drawing = Drawing(os.path.join(self.root, 'svg', svg).replace('\\', '/'), portrait,
                           center=True, resize=True, dx=5)
 
-        angles, dts = self.agility.draw(drawing, self.params['speed'], self.params['forward'], -7.6, self.params['lift'])
+        angles, dts = self.agility.draw(drawing, self.params['speed'], self.params['offset'], -7.6, self.params['lift'])
         self.event.clear()
         completed = self.agility.execute(angles, dts, event=self.event)
 
         if not completed:
             self.agility.zero()
 
-        self.working = False
-
     @wamp.register('arm.draw_weather')
     async def draw_weather(self):
-        if self.initialized:
-            if not self.working:
-                self.working = True
-                self.run(self._draw_weather)
-                return 'Drawing the weather.'
-            else:
-                return 'I am currently busy.'
+        if not self.initialized:
+            return self.call('controller.speak', 'Please wait. System is not initialized.')
+
+        if self.work_lock.acquire(blocking=False):
+            try:
+                self.call('controller.speak', 'Drawing the weather.')
+                await self.run(self._draw_weather)
+            finally:
+                self.work_lock.release()
         else:
-            return 'System is not initialized.'
+            self.call('controller.speak', 'I am currently busy.')
 
     def _zero(self):
         self.agility.zero()
-        self.working = False
 
     @wamp.register('arm.zero')
     async def zero(self):
-        if self.initialized:
-            if not self.working:
-                self.working = True
-                self.run(self._zero)
-                return 'Zeroing the arm.'
-            else:
-                return 'I am currently busy.'
+        if not self.initialized:
+            return self.call('controller.speak', 'Please wait. System is not initialized.')
+
+        if self.work_lock.acquire(blocking=False):
+            try:
+                self.call('controller.speak', 'Zeroing the arm.')
+                await self.run(self._zero)
+            finally:
+                self.work_lock.release()
         else:
-            return 'System is not initialized.'
+            self.call('controller.speak', 'I am currently busy.')
 
     @wamp.register('arm.stop')
     async def stop(self):
-        if self.working:
+        if not self.work_lock.acquire(blocking=False):
             self.event.set()
-            return 'Stopping.'
+            self.call('controller.speak', 'Stopping.')
         else:
-            return 'I cannot stop doing nothing.'
+            self.call('controller.speak', 'I cannot stop doing nothing.')
 
     @wamp.register('arm.info')
     async def info(self):
         text = 'The current configuration is as follows. ' \
                'Linear velocity: {}. ' \
                'X-offset: {}. ' \
-               'Lift height: {}.'.format(self.params['speed'], self.params['forward'], self.params['lift'])
+               'Lift height: {}.'.format(self.params['speed'], self.params['offset'], self.params['lift'])
 
-        return text
+        self.call('controller.speak', text)
+
+    def _set_parameter(self, param, value):
+        value = Numeric.to_float(value)
+
+        if value is None:
+            return self.call('controller.speak', 'I don\'t recognize that number.')
+
+        if param not in self.params:
+            return self.call('controller.speak', 'I don\'t recognize that parameter.')
+
+        self.params[param] = value
+
+    @wamp.register('arm.set_parameter')
+    async def set_parameter(self, param, value):
+        self.call('controller.speak', 'Setting parameter.')
+        await self.run(self._set_parameter, param, value)
+
+    def _relative_move(self, direction, delta):
+        delta = Numeric.to_float(delta)
+
+        if delta is None:
+            return self.call('controller.speak', 'I don\'t recognize that number.')
+
+        dx = 0
+        dy = 0
+        dz = 0
+
+        if direction == 'left':
+            dy += delta
+        elif direction == 'right':
+            dy -= delta
+        elif direction == 'forward':
+            dx += delta
+        elif direction == 'backward':
+            dx -= delta
+        elif direction == 'up':
+            dz += delta
+        elif direction == 'down':
+            dz -= delta
+        else:
+            return self.call('controller.speak', 'I don\'t recognize that direction.')
+
+        self.agility.move_relative((dx, dy, dz), pi, self.params['speed'])
+
+    @wamp.register('arm.move_relative')
+    async def relative_move(self, direction, delta):
+        if not self.initialized:
+            return self.call('controller.speak', 'Please wait. System is not initialized.')
+
+        if self.work_lock.acquire(blocking=False):
+            try:
+                self.call('controller.speak', 'Moving.')
+                await self.run(self._relative_move, direction, delta)
+            finally:
+                self.work_lock.release()
+        else:
+            self.call('controller.speak', 'I am currently busy.')
+
+    def _absolute_move(self, x, y, z):
+        x = Numeric.to_float(x)
+        y = Numeric.to_float(y)
+        z = Numeric.to_float(z)
+
+        if x is None or y is None or z is None:
+            return self.call('controller.speak', 'I don\'t recognize that coordinate.')
+
+        self.agility.move_absolute((x, y, z), pi, self.params['speed'])
+
+    @wamp.register('arm.move_absolute')
+    async def relative_move(self, x, y, z):
+        if not self.initialized:
+            return self.call('controller.speak', 'Please wait. System is not initialized.')
+
+        if self.work_lock.acquire(blocking=False):
+            try:
+                self.call('controller.speak', 'Moving.')
+                await self.run(self._absolute_move, x, y, z)
+            finally:
+                self.work_lock.release()
+        else:
+            self.call('controller.speak', 'I am currently busy.')
 
 if __name__ == '__main__':
     # Configure SSL.

@@ -55,7 +55,7 @@ def run():
 
         if target != last_target:
             logger.info('Moving arm to ({:.2f}, {:.2f}, {:.2f}).'.format(*target))
-            agility.move_to((*target, pi), 5)
+            agility.move_absolute((*target, pi), 5)
             last_target = target
 
         time.sleep(0.001)

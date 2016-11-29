@@ -27,6 +27,7 @@
 ###############################################################################
 
 import signal
+import logging
 
 from autobahn.wamp.types import ComponentConfig
 try:
@@ -39,6 +40,7 @@ import asyncio
 import txaio
 
 txaio.use_asyncio()
+logger = logging.getLogger('universe')
 
 class ExceededRetryCount(Exception):
     pass
@@ -169,7 +171,7 @@ class ApplicationRunner(object):
         txaio.use_asyncio()
         txaio.config.loop = self._loop
 
-        asyncio.async(self._connect(), loop=self._loop)
+        asyncio.ensure_future(self._connect(), loop=self._loop)
         # self._loop.add_signal_handler(signal.SIGTERM, self.stop)
 
         try:
@@ -196,13 +198,13 @@ class ApplicationRunner(object):
                 self._active_protocol = protocol
                 return
             except OSError:
-                print('Connection failed')
+                logger.info('Connection failed.')
                 if self._retry_strategy.retry():
                     retry_interval = self._retry_strategy.get_retry_interval()
-                    print('Retry in {} seconds'.format(retry_interval))
+                    logger.info('Retry in {} seconds.'.format(retry_interval))
                     yield from asyncio.sleep(retry_interval)
                 else:
-                    print('Exceeded retry count')
+                    logger.info('Exceeded retry count.')
                     self._loop.stop()
                     raise ExceededRetryCount()
 
@@ -210,10 +212,10 @@ class ApplicationRunner(object):
 
     def _reconnect(self, f):
         # Reconnect
-        print('Connection lost')
+        logger.info('Connection lost')
         if not self._closing:
-            print('Reconnecting')
-            asyncio.async(self._connect(), loop=self._loop)
+            logger.info('Reconnecting')
+            asyncio.ensure_future(self._connect(), loop=self._loop)
 
     def stop(self, *args):
         self._loop.stop()

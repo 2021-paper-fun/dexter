@@ -106,6 +106,8 @@ voice.populate = function () {
 };
 
 voice.speak = function (text) {
+    echo('Speaking: "' + text + '"');
+
     var msg = new SpeechSynthesisUtterance();
 
     msg.text = text;
@@ -113,6 +115,16 @@ voice.speak = function (text) {
 
     synth.speak(msg);
 };
+
+ws.register('controller.speak', {
+    rpc: voice.speak,
+    onSuccess: function (data) {
+        echo('Successfully registered speaking function.');
+    },
+    onError: function (err, details) {
+        echo('Unable ot register speaking funciton: ' + err + '.');
+    }
+});
 
 voice.populate();
 synth.onvoiceschanged = voice.populate;
@@ -132,11 +144,9 @@ control.call = function (f, payload) {
 
     ws.call('arm.' + f, payload, {
         onSuccess: function (data) {
-            voice.speak(data);
             echo('Successfully called "' + f + '."')
         },
         onError: function (err, details, [arrayData, objectData]) {
-            voice.speak('An error occurred.');
             echo('Error while calling "' + f + '": ' + err + '.');
         }
     });
@@ -155,6 +165,15 @@ var commands = {
     },
     '(dexter) zero': function () {
         control.call('zero');
+    },
+    '(dexter) move :direction :float': function (direction, float) {
+        control.call('move_relative', [direction, float]);
+    },
+    '(dexter) move :x, :y, :z': function (x, y, z) {
+        control.call('move_absolute', [x, y, z]);
+    },
+    '(dexter) set :parameter :float': function (parameter, float) {
+        control.call('set_parameter', [parameter, float]);
     }
 };
 
