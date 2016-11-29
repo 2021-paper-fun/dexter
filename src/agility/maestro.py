@@ -42,7 +42,7 @@ class Maestro:
         # Start a connection using pyserial.
         try:
             self.usb = serial.Serial(self.port, baudrate=baud, write_timeout=0)
-            logger.info('Using command port "{}".'.format(self.usb.port))
+            logger.info('Using command port "{}."'.format(self.usb.port))
         except:
             raise ConnectionError('Unable to connect to servo controller at {}.'.format(self.port))
 
