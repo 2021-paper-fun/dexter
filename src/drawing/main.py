@@ -5,7 +5,10 @@ import copy
 import inspect
 import sys
 import os
+import subprocess
 import logging
+from io import BytesIO
+from PIL import Image
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.widgets import Button
@@ -772,8 +775,16 @@ class Drawing:
 
         assert self.min_points >= 2
 
-        logger.info('Loading SVG file "{}."'.format(self.file))
-        tree = etree.parse(file)
+        logger.info('Loading file "{}."'.format(self.file))
+
+        try:
+            tree = etree.parse(file)
+        except etree.ParseError:
+            logger.info('Tracing using Potrace.')
+            bmp = self._convert(file)
+            file = self._trace(bmp)
+            tree = etree.parse(file)
+
         root = tree.getroot()
 
         if root.get('viewBox') is None:
@@ -825,6 +836,29 @@ class Drawing:
         self.points = self._get_points()
 
         logger.info('Completed processing SVG.')
+
+    def _convert(self, file):
+        image = Image.open(file)
+        output = BytesIO()
+        image.save(output, format='bmp')
+
+        return output
+
+    def _trace(self, data):
+        if sys.platform == 'win32':
+            exec = 'potrace.exe'
+        elif sys.platform == 'linux' or sys.platform == 'linux2':
+            exec = 'potrace-linux'
+        elif sys.platform == 'darwin':
+            exec = 'potrace-osx'
+        else:
+            raise Exception('No executable found for tracing.')
+
+        exec = os.path.join(os.path.dirname(__file__), 'potrace', exec)
+        args = [exec, '-s', '-o', '-', '-']
+
+        result = subprocess.run(args, input=data.getvalue(), stdout=subprocess.PIPE)
+        return BytesIO(result.stdout)
 
     def _get_points(self):
         points = []

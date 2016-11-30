@@ -261,7 +261,7 @@ class Agility:
             logger.warning("Failed to attached to Maestro's command port. "
                            "If not debugging, consider this a fatal error.")
 
-        # self.zero()
+        logger.info('Agility initialized.')
 
     @staticmethod
     def smooth(a, b, n):

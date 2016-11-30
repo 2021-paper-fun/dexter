@@ -4,7 +4,10 @@ from threading import Event, Lock
 import os
 from math import pi
 import pyowm
+from io import BytesIO
+from cleverbot import Cleverbot
 from datetime import datetime, timedelta
+
 import requests
 
 from util import logger, logging_queue
@@ -34,10 +37,73 @@ class Numeric:
             return None
 
 
+class Chatbot:
+    def __init__(self):
+        self.bot = Cleverbot()
+
+        logger.info('Chatbot initialized.')
+
+    def ask(self, text):
+        return self.bot.ask(text)
+
+
 class Image:
     def __init__(self):
         self.api_key = '3885957-fe1000226f3034f8bdbf7b9bf'
-        
+        self.url = 'https://pixabay.com/api/'
+
+        logger.info('Image search system initialized.')
+
+    def get_svg_url(self, q, index):
+        payload = {
+            'key': self.api_key,
+            'q': q,
+            'response_group': 'high_resolution',
+            'image_type': 'vector',
+        }
+
+        r = requests.get(self.url, params=payload)
+
+        try:
+            images = r.json()
+        except ValueError:
+            return None
+
+        hits = images['hits']
+
+        for image in hits:
+            if not image['vectorURL'].endswith('.svg'):
+                hits.remove(image)
+
+        if len(hits) <= index:
+            return None
+
+        return hits[index]['vectorURL']
+
+    def get_all_url(self, q, index):
+        payload = {
+            'key': self.api_key,
+            'q': q,
+            'response_group': 'high_resolution'
+        }
+
+        r = requests.get(self.url, params=payload)
+
+        try:
+            images = r.json()
+        except ValueError:
+            return None
+
+        hits = images['hits']
+
+        if len(hits) <= index:
+            return None
+
+        return hits[index]['largeImageURL']
+
+    def get_image(self, url):
+        r = requests.get(url)
+        return BytesIO(r.content)
 
 
 class Weather:
@@ -103,8 +169,10 @@ class Cerebral(ApplicationSession):
         self.loop = asyncio.get_event_loop()
         self.executor = ThreadPoolExecutor(10)
 
-        self.weather = None
         self.agility = None
+        self.chatbot = None
+        self.image = None
+        self.weather = None
 
         self.initialized = False
         self.work_lock = Lock()
@@ -146,8 +214,10 @@ class Cerebral(ApplicationSession):
         return asyncio.wrap_future(self.executor.submit(fn, *args, **kwargs))
 
     def initialize(self):
-        self.weather = Weather()
         self.agility = Agility(Android.arm)
+        self.chatbot = Chatbot()
+        self.image = Image()
+        self.weather = Weather()
 
         self.initialized = True
         logger.info('Initialization complete.')
@@ -171,10 +241,15 @@ class Cerebral(ApplicationSession):
         self.call('controller.speak', message)
 
     def _draw(self, svg):
+        self.call('controller.speak', 'Executing draw.')
+
         landscape = (11.0 * 96, 8.5 * 96)
         portrait = (landscape[1], landscape[0])
-        drawing = Drawing(os.path.join(self.root, 'svg', svg).replace('\\', '/'), portrait,
-                          center=True, resize=True, dx=20)
+
+        if type(svg) == str:
+            svg = os.path.join(self.root, 'svg', svg).replace('\\', '/')
+
+        drawing = Drawing(svg, portrait, center=True, resize=True, dx=20)
 
         angles, dts = self.agility.draw(drawing, self.params['speed'], self.params['offset'],
                                         self.params['depth'], self.params['lift'])
@@ -183,6 +258,66 @@ class Cerebral(ApplicationSession):
 
         if not completed:
             self.agility.zero()
+
+    def _trace_image(self, q, index):
+        index = Numeric.to_int(index)
+
+        if index is None:
+            return self.call('controller.speak', 'I don\'t recognize that index.')
+
+        url = self.image.get_all_url(q, index)
+
+        if url is None:
+            return self.call('controller.speak', 'I am unable to find an image with those specifications.')
+
+        logger.info('Image URL: {}.'.format(url))
+
+        svg = self.image.get_image(url)
+        self._draw(svg)
+
+    @wamp.register('arm.trace_image')
+    async def trace_image(self, q, index=0):
+        if not self.initialized:
+            return self.call('controller.speak', 'Please wait. System is not initialized.')
+
+        if self.work_lock.acquire(blocking=False):
+            try:
+                self.call('controller.speak', 'Fetching image from Pixabay.')
+                await self.run(self._trace_image, q, index)
+            finally:
+                self.work_lock.release()
+        else:
+            self.call('controller.speak', 'I am currently busy.')
+
+    def _draw_image(self, q, index):
+        index = Numeric.to_int(index)
+
+        if index is None:
+            return self.call('controller.speak', 'I don\'t recognize that index.')
+
+        url = self.image.get_svg_url(q, index)
+
+        if url is None:
+            return self.call('controller.speak', 'I am unable to find an image with those specifications.')
+
+        logger.info('Image URL: {}.'.format(url))
+
+        svg = self.image.get_image(url)
+        self._draw(svg)
+
+    @wamp.register('arm.draw_image')
+    async def draw_image(self, q, index=0):
+        if not self.initialized:
+            return self.call('controller.speak', 'Please wait. System is not initialized.')
+
+        if self.work_lock.acquire(blocking=False):
+            try:
+                self.call('controller.speak', 'Fetching image from Pixabay.')
+                await self.run(self._draw_image, q, index)
+            finally:
+                self.work_lock.release()
+        else:
+            self.call('controller.speak', 'I am currently busy.')
 
     def _draw_weather(self):
         svg = self.weather.get_now()
@@ -381,6 +516,12 @@ class Cerebral(ApplicationSession):
     async def get_position(self):
         position = await self.run(self.agility.get_position)
         self.call('controller.speak', 'The current position is {:.2f}, {:.2f}, {:.2f}.'.format(*position))
+
+    @wamp.register('arm.chat')
+    async def chat(self, input):
+        response = await self.run(self.chatbot.ask, input)
+        self.call('controller.speak', response)
+
 
 if __name__ == '__main__':
     # Configure SSL.

@@ -118,6 +118,12 @@ voice.speak = function (text) {
 
     msg.text = text;
     msg.voice = voice.v;
+    msg.onend = function (e) {
+        annyang.resume();
+    };
+    msg.onstart = function (e) {
+        annyang.pause();
+    };
 
     synth.speak(msg);
 };
@@ -139,14 +145,12 @@ synth.onvoiceschanged = voice.populate;
 // Recognition.
 var control = {};
 
-control.hello = function () {
-    voice.speak('Hello. I am alive.');
-};
-
 control.call = function (f, payload, say_success, say_error) {
     if (payload === undefined) {
         payload = null;
     }
+
+    echo('Calling "' + f + '" with payload [' + String(payload) + '].');
 
     ws.call('arm.' + f, payload, {
         onSuccess: function () {
@@ -161,12 +165,23 @@ control.call = function (f, payload, say_success, say_error) {
 };
 
 var commands = {
-    'hello': {'regexp': /^\s*(?:hello|hi)?\s*dexter$/i, 'callback': control.hello},
-    '(dexter) draw today\'s weather': function () {
+    '(dexter) trace *q': function (q) {
+        control.call('trace_image', [q]);
+    },
+    '(dexter) trace index :i query *q': function (i, q) {
+        control.call('trac_image', [i, q]);
+    },
+    '(dexter) draw the weather': function () {
         control.call('draw_weather');
     },
     '(dexter) draw the weather in :value :units': function (value, units) {
         control.call('draw_forecast', [value, units]);
+    },
+    '(dexter) draw *q': function (q) {
+        control.call('draw_image', [q]);
+    },
+    '(dexter) draw index :i query *q': function (i, q) {
+        control.call('draw_image', [q, i]);
     },
     '(dexter) ready': function () {
         control.call('ready', null, null, 'I can\'t feel my arm. Did you power it on?');
@@ -200,6 +215,9 @@ var commands = {
     },
     '(dexter) get position': function () {
         control.call('get_position');
+    },
+    '(dexter) *input': function (input) {
+        control.call('chat', [input]);
     }
 };
 
