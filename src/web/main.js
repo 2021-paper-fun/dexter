@@ -34,6 +34,7 @@ function echo2(dt, text) {
     term.echo('[[;#ff7f00;#000]&#91;' + dt + '&#93;] ' + text);
 }
 
+
 // System messages.
 echo('Starting system.');
 echo('Public IP is ' + ip + '.');
@@ -107,6 +108,10 @@ voice.populate = function () {
 };
 
 voice.speak = function (text) {
+    if (text === undefined || text === null || text === '') {
+        return;
+    }
+
     echo('Speaking: "' + text + '"');
 
     var msg = new SpeechSynthesisUtterance();
@@ -138,17 +143,19 @@ control.hello = function () {
     voice.speak('Hello. I am alive.');
 };
 
-control.call = function (f, payload) {
+control.call = function (f, payload, say_success, say_error) {
     if (payload === undefined) {
         payload = null;
     }
 
     ws.call('arm.' + f, payload, {
-        onSuccess: function (data) {
-            echo('Successfully called "' + f + '."')
+        onSuccess: function () {
+            echo('Successfully called "' + f + '."');
+            voice.speak(say_success);
         },
-        onError: function (err, details, [arrayData, objectData]) {
+        onError: function (err) {
             echo('Error while calling "' + f + '": ' + err + '.');
+            voice.speak(say_error);
         }
     });
 };
@@ -158,8 +165,11 @@ var commands = {
     '(dexter) draw today\'s weather': function () {
         control.call('draw_weather');
     },
+    '(dexter) draw the weather in :value :units': function (value, units) {
+        control.call('draw_forecast', [value, units]);
+    },
     '(dexter) ready': function () {
-        control.call('ready');
+        control.call('ready', null, null, 'I can\'t feel my arm. Did you power it on?');
     },
     '(dexter) stop': function () {
         control.call('stop');
@@ -173,14 +183,23 @@ var commands = {
     '(dexter) move :direction :float': function (direction, float) {
         control.call('move_relative', [direction, float]);
     },
-    '(dexter) move :x, :y, :z': function (x, y, z) {
+    '(dexter) move (to) :x, :y, :z': function (x, y, z) {
         control.call('move_absolute', [x, y, z]);
     },
     '(dexter) set :parameter :float': function (parameter, float) {
         control.call('set_parameter', [parameter, float]);
     },
-    '(dexter) save point :num': function (num) {
-        control.call('save_point', [num]);
+    '(dexter) save point as :name': function (name) {
+        control.call('save_point', [name]);
+    },
+    '(dexter) load point :name': function (name) {
+        control.call('load_point', [name])
+    },
+    '(dexter) calibrate': function () {
+        control.call('calibrate');
+    },
+    '(dexter) get position': function () {
+        control.call('get_position');
     }
 };
 

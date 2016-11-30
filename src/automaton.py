@@ -4,6 +4,7 @@ from threading import Event, Lock
 import os
 from math import pi
 import pyowm
+from datetime import datetime, timedelta
 import requests
 
 from util import logger, logging_queue
@@ -31,6 +32,12 @@ class Numeric:
             return int(num)
         except ValueError:
             return None
+
+
+class Image:
+    def __init__(self):
+        self.api_key = '3885957-fe1000226f3034f8bdbf7b9bf'
+        
 
 
 class Weather:
@@ -64,9 +71,27 @@ class Weather:
 
         logger.info('Weather system initialized.')
 
-    def get_icon(self):
+    def get_now(self):
         observation = self.owm.weather_at_place(self.location)
         w = observation.get_weather()
+        icon = w.get_weather_icon_name()
+
+        return 'weather/' + self.icons[icon]
+
+    def get_forecast(self, value, units):
+        dt = datetime.now()
+
+        if units == 'minutes' or units == 'minute':
+            dt += timedelta(minutes=value)
+        elif units == 'hours' or units == 'hour':
+            dt += timedelta(hours=value)
+        elif units == 'days' or units == 'day':
+            dt += timedelta(days=value)
+        elif units == 'weeks' or units == 'week':
+            dt += timedelta(weeks=value)
+
+        forecast = self.owm.daily_forecast(self.location)
+        w = forecast.get_weather_at(dt)
         icon = w.get_weather_icon_name()
 
         return 'weather/' + self.icons[icon]
@@ -85,11 +110,12 @@ class Cerebral(ApplicationSession):
         self.work_lock = Lock()
         self.event = Event()
 
-        self.points = [None, None, None]
+        self.points = {}
         self.params = {
             'lift': 4.0,
             'speed': 10.0,
-            'offset': 6.0
+            'offset': 6.0,
+            'depth': -7.5
         }
 
         super().__init__(*args, **kwargs)
@@ -144,20 +170,23 @@ class Cerebral(ApplicationSession):
 
         self.call('controller.speak', message)
 
-    def _draw_weather(self):
-        svg = self.weather.get_icon()
-
+    def _draw(self, svg):
         landscape = (11.0 * 96, 8.5 * 96)
         portrait = (landscape[1], landscape[0])
         drawing = Drawing(os.path.join(self.root, 'svg', svg).replace('\\', '/'), portrait,
-                          center=True, resize=True, dx=5)
+                          center=True, resize=True, dx=20)
 
-        angles, dts = self.agility.draw(drawing, self.params['speed'], self.params['offset'], -7.6, self.params['lift'])
+        angles, dts = self.agility.draw(drawing, self.params['speed'], self.params['offset'],
+                                        self.params['depth'], self.params['lift'])
         self.event.clear()
         completed = self.agility.execute(angles, dts, event=self.event)
 
         if not completed:
             self.agility.zero()
+
+    def _draw_weather(self):
+        svg = self.weather.get_now()
+        self._draw(svg)
 
     @wamp.register('arm.draw_weather')
     async def draw_weather(self):
@@ -168,6 +197,36 @@ class Cerebral(ApplicationSession):
             try:
                 self.call('controller.speak', 'Drawing the weather.')
                 await self.run(self._draw_weather)
+            finally:
+                self.work_lock.release()
+        else:
+            self.call('controller.speak', 'I am currently busy.')
+
+    def _draw_forecast(self, value, units):
+        value = Numeric.to_float(value)
+
+        if value is None:
+            return self.call('controller.speak', 'I don\'t recognize that number.')
+
+        if units not in ('minute', 'minutes', 'hour', 'hours', 'day', 'days', 'week', 'weeks'):
+            return self.call('controller.speak', 'I don\'t recognize that unit.')
+
+        try:
+            svg = self.weather.get_forecast(value, units)
+        except Exception:
+            return self.call('controller.speak', 'Forecast out of range.')
+
+        self._draw(svg)
+
+    @wamp.register('arm.draw_forecast')
+    async def draw_forecast(self, value, units):
+        if not self.initialized:
+            return self.call('controller.speak', 'Please wait. System is not initialized.')
+
+        if self.work_lock.acquire(blocking=False):
+            try:
+                self.call('controller.speak', 'Drawing the forecast.')
+                await self.run(self._draw_forecast, value, units)
             finally:
                 self.work_lock.release()
         else:
@@ -196,14 +255,17 @@ class Cerebral(ApplicationSession):
             self.event.set()
             self.call('controller.speak', 'Stopping.')
         else:
+            self.work_lock.release()
             self.call('controller.speak', 'I cannot stop doing nothing.')
 
     @wamp.register('arm.info')
     async def info(self):
         text = 'The current configuration is as follows. ' \
-               'Linear velocity: {}. ' \
-               'X-offset: {}. ' \
-               'Lift height: {}.'.format(self.params['speed'], self.params['offset'], self.params['lift'])
+               'Linear velocity: {:.2f}. ' \
+               'X-offset: {:.2f}. ' \
+               'Lift height: {:.2f}.' \
+               'Z-depth: {:.2f}.'.format(self.params['speed'], self.params['offset'],
+                                     self.params['lift'], self.params['depth'])
 
         self.call('controller.speak', text)
 
@@ -275,7 +337,7 @@ class Cerebral(ApplicationSession):
         self.agility.move_absolute((x, y, z), pi, self.params['speed'])
 
     @wamp.register('arm.move_absolute')
-    async def relative_move(self, x, y, z):
+    async def absolute_move(self, x, y, z):
         if not self.initialized:
             return self.call('controller.speak', 'Please wait. System is not initialized.')
 
@@ -288,21 +350,37 @@ class Cerebral(ApplicationSession):
         else:
             self.call('controller.speak', 'I am currently busy.')
 
-    def _save_point(self, num):
-        num = Numeric.to_int(num)
-
-        if num is None or num < 1 or num > 3:
-            return self.call('controller.speak', 'Invalid index.')
-
-        self.points[num - 1] = self.agility.arm.get_position()
+    def _save_point(self, name):
+        self.points[name] = self.agility.get_position()
 
     @wamp.register('arm.save_point')
-    async def save_point(self, num):
+    async def save_point(self, name):
         if not self.initialized:
             return self.call('controller.speak', 'Please wait. System is not initialized.')
 
         self.call('controller.speak', 'Saving current location.')
-        await self.run(self._save_point, num)
+        await self.run(self._save_point, name)
+
+    @wamp.register('arm.load_point')
+    async def load_point(self, name):
+        if name not in self.points:
+            return self.call('controller.speak', 'I am unable to find that point.')
+
+        await self._absolute_move(*self.points[name])
+
+    def _calibrate(self):
+        pos = self.agility.get_position()
+        self.params['depth'] = pos[2]
+
+    @wamp.register('arm.calibrate')
+    async def calibrate(self):
+        self.call('controller.speak', 'Calibrate depth using current position.')
+        await self.run(self._calibrate)
+
+    @wamp.register('arm.get_position')
+    async def get_position(self):
+        position = await self.run(self.agility.get_position)
+        self.call('controller.speak', 'The current position is {:.2f}, {:.2f}, {:.2f}.'.format(*position))
 
 if __name__ == '__main__':
     # Configure SSL.

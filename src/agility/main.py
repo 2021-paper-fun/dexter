@@ -288,6 +288,15 @@ class Agility:
 
         return inter
 
+    def get_position(self):
+        """
+        Get the position of the arm.
+        :return: A tuple of (x, y, z).
+        """
+
+        self.maestro.get_multiple_positions(self.arm)
+        return self.arm.get_position()
+
     def draw(self, drawing, v, x, z, lift):
         """
         Draw a given drawing.
