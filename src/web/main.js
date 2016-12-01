@@ -164,7 +164,28 @@ control.call = function (f, payload, say_success, say_error) {
     });
 };
 
-var commands = {
+control.activate = function () {
+    annyang.removeCommands();
+    annyang.addCommands(active_commands);
+    voice.speak('Hello. I am alive.');
+};
+
+control.deactivate = function () {
+    annyang.removeCommands();
+    annyang.addCommands(inactive_commands);
+    voice.speak('Going to sleep.')
+};
+
+var inactive_commands = {
+    'dexter': function () {
+        control.activate();
+    }
+};
+
+var active_commands = {
+    '(dexter) sleep': function () {
+        control.deactivate();
+    }
     '(dexter) trace *q': function (q) {
         control.call('trace_image', [q]);
     },
@@ -221,7 +242,8 @@ var commands = {
     }
 };
 
-annyang.addCommands(commands);
+
+annyang.addCommands(inactive_commands);
 annyang.addCallback('start', function () {
     echo('Voice recognition initialized.');
     annyang.removeCallback('start');
