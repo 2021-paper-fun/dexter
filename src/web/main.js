@@ -227,7 +227,7 @@ annyang.addCallback('start', function () {
     annyang.removeCallback('start');
 });
 
-annyang.debug();
+// annyang.debug();
 annyang.start();
 
 
