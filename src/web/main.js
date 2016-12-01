@@ -185,7 +185,7 @@ var inactive_commands = {
 var active_commands = {
     '(dexter) sleep': function () {
         control.deactivate();
-    }
+    },
     '(dexter) trace *q': function (q) {
         control.call('trace_image', [q]);
     },
