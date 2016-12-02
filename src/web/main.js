@@ -181,14 +181,26 @@ var inactive_commands = {
 };
 
 var active_commands = {
+    '(dexter) calibrate': function () {
+        control.call('calibrate');
+    },
+    '(dexter) get position': function () {
+        control.call('get_position');
+    },
+    '(dexter) home': function () {
+        control.call('home');
+    },
+    '(dexter) info': function () {
+        control.call('info');
+    },
+    '(dexter) ready': function () {
+        control.call('ready', null, null, 'I can\'t feel my arm. Did you power it on?');
+    },
     '(dexter) sleep': function () {
         control.deactivate();
     },
-    '(dexter) trace *q': function (q) {
-        control.call('trace_image', [q]);
-    },
-    '(dexter) trace index :i query *q': function (i, q) {
-        control.call('trac_image', [i, q]);
+    '(dexter) stop': function () {
+        control.call('stop');
     },
     '(dexter) draw the weather': function () {
         control.call('draw_weather');
@@ -202,17 +214,11 @@ var active_commands = {
     '(dexter) draw index :i query *q': function (i, q) {
         control.call('draw_image', [q, i]);
     },
-    '(dexter) ready': function () {
-        control.call('ready', null, null, 'I can\'t feel my arm. Did you power it on?');
+    '(dexter) trace *q': function (q) {
+        control.call('trace_image', [q]);
     },
-    '(dexter) stop': function () {
-        control.call('stop');
-    },
-    '(dexter) info': function () {
-        control.call('info');
-    },
-    '(dexter) home': function () {
-        control.call('home');
+    '(dexter) trace index :i query *q': function (i, q) {
+        control.call('trac_image', [i, q]);
     },
     '(dexter) move :direction :float': function (direction, float) {
         control.call('move_relative', [direction, float]);
@@ -220,20 +226,14 @@ var active_commands = {
     '(dexter) move (to) :x, :y, :z': function (x, y, z) {
         control.call('move_absolute', [x, y, z]);
     },
-    '(dexter) set :parameter :float': function (parameter, float) {
-        control.call('set_parameter', [parameter, float]);
+    '(dexter) load point :name': function (name) {
+        control.call('load_point', [name])
     },
     '(dexter) save point as :name': function (name) {
         control.call('save_point', [name]);
     },
-    '(dexter) load point :name': function (name) {
-        control.call('load_point', [name])
-    },
-    '(dexter) calibrate': function () {
-        control.call('calibrate');
-    },
-    '(dexter) get position': function () {
-        control.call('get_position');
+    '(dexter) set :parameter :float': function (parameter, float) {
+        control.call('set_parameter', [parameter, float]);
     },
     '(dexter) *input': function (input) {
         control.call('chat', [input]);
