@@ -153,11 +153,11 @@ control.call = function (f, payload, say_success, say_error) {
     ws.call('arm.' + f, payload, {
         onSuccess: function () {
             echo('Successfully called "' + f + '."');
-            voice.speak(say_success);
+            ws.call('controller.speak', say_success, function () { return undefined; });
         },
         onError: function (err) {
             echo('Error while calling "' + f + '": ' + err + '.');
-            voice.speak(say_error);
+            ws.call('controller.speak', say_error, function () { return undefined; });
         }
     });
 };
@@ -166,14 +166,14 @@ control.activate = function () {
     annyang.removeCommands();
     annyang.addCommands(active_commands);
     echo('Voice control activated.');
-    voice.speak('Hello. I am alive.');
+    ws.call('controller.speak', 'Hello. I am alive.', function () { return undefined; });
 };
 
 control.deactivate = function () {
     annyang.removeCommands();
     annyang.addCommands(inactive_commands);
     echo('Voice control deactivated.');
-    voice.speak('Going to sleep.')
+    ws.call('controller.speak', 'Going to sleep.', function () { return undefined; });
 };
 
 var inactive_commands = {
@@ -211,13 +211,13 @@ var active_commands = {
         control.call('draw_forecast', [value, units]);
     },
     '(dexter) draw *q': function (q) {
-        control.call('draw_image', [q]);
+        control.call('draw_image', q);
     },
     '(dexter) draw index :i query *q': function (i, q) {
         control.call('draw_image', [q, i]);
     },
     '(dexter) trace *q': function (q) {
-        control.call('trace_image', [q]);
+        control.call('trace_image', q);
     },
     '(dexter) trace index :i query *q': function (i, q) {
         control.call('trac_image', [i, q]);
@@ -229,16 +229,16 @@ var active_commands = {
         control.call('move_absolute', [x, y, z]);
     },
     '(dexter) load point :name': function (name) {
-        control.call('load_point', [name])
+        control.call('load_point', name);
     },
     '(dexter) save point as :name': function (name) {
-        control.call('save_point', [name]);
+        control.call('save_point', name);
     },
     '(dexter) set :parameter :float': function (parameter, float) {
         control.call('set_parameter', [parameter, float]);
     },
     '(dexter) *input': function (input) {
-        control.call('chat', [input]);
+        control.call('chat', input);
     }
 };
 
@@ -249,7 +249,7 @@ annyang.addCallback('start', function () {
     annyang.removeCallback('start');
 });
 
-// annyang.debug();
+annyang.debug();
 annyang.start();
 
 

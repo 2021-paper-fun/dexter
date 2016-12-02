@@ -4,6 +4,7 @@ from threading import Event, Lock
 import os
 from math import pi
 import pyowm
+import time
 from io import BytesIO
 from cleverbot import Cleverbot
 from datetime import datetime, timedelta
@@ -176,6 +177,7 @@ class Cerebral(ApplicationSession):
 
         self.initialized = False
         self.work_lock = Lock()
+        self.wamp_lock = Lock()
         self.event = Event()
 
         self.points = {}
@@ -222,14 +224,14 @@ class Cerebral(ApplicationSession):
         self.initialized = True
         logger.info('Initialization complete.')
 
-    def speak(self, text):
-        logger.info('Speaking "{}"'.format(text))
-        self.call('controller.speak', text)
+    def speak(self, message):
+        logger.info('Speaking "{}"'.format(message))
+        self.call('controller.speak', message)
 
     def watch_logging(self):
         while True:
             message = logging_queue.get()
-            self.publish('arm.log', *message)
+            self.loop.call_soon_threadsafe(self.publish, 'arm.log', *message)
 
     ########################
     # Main remote functions.
