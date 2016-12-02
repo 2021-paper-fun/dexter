@@ -26,3 +26,22 @@ dexter | Wake up the robot. No other commands will work until the robot is woken
 (dexter) save point as `:name` | Save the arm's current position under an alias. `:name` can be any text.
 (dexter) set `:parameter` `:float` | Set a configuration parameter. `:parameter` can be one of lift, speed, offset, or depth. `:float` can be any float.
 (dexter) `*input` | All other inputs will query Cleverbot for a response. `:input` can be any text.
+
+### Requirements
+
+The following software are required to run this project.
+
+- Python 3.5 or higher
+- Python packages: numpy, scipy, matplotlib, pillow (PIL), autobahn
+- Crossbar.io (or equivalent router supporting WAMP 2)
+- A browser that supports the Web Speech API (Chrome 33+ or Firefox 49+).
+
+### References
+
+This project's SVG parser uses some modified implementations from the following packages.
+
+- [svg.path](https://github.com/regebro/svg.path)
+- [svgpathtools](https://github.com/mathandy/svgpathtools)
+- [svg](https://github.com/cjlano/svg)
+- [Flatten.js](https://gist.github.com/timo22345/9413158)
+
