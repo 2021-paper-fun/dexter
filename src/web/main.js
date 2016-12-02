@@ -112,8 +112,6 @@ voice.speak = function (text) {
         return;
     }
 
-    echo('Speaking: "' + text + '"');
-
     var msg = new SpeechSynthesisUtterance();
 
     msg.text = text;
@@ -134,7 +132,7 @@ ws.register('controller.speak', {
         echo('Successfully registered speaking function.');
     },
     onError: function (err, details) {
-        echo('Unable ot register speaking funciton: ' + err + '.');
+        echo('Unable ot register speaking function: ' + err + '.');
     }
 });
 
@@ -213,8 +211,8 @@ var active_commands = {
     '(dexter) info': function () {
         control.call('info');
     },
-    '(dexter) zero': function () {
-        control.call('zero');
+    '(dexter) home': function () {
+        control.call('home');
     },
     '(dexter) move :direction :float': function (direction, float) {
         control.call('move_relative', [direction, float]);

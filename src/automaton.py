@@ -222,6 +222,10 @@ class Cerebral(ApplicationSession):
         self.initialized = True
         logger.info('Initialization complete.')
 
+    def speak(self, text):
+        logger.info('Speaking "{}"'.format(text))
+        self.call('controller.speak', text)
+
     def watch_logging(self):
         while True:
             message = logging_queue.get()
@@ -238,10 +242,10 @@ class Cerebral(ApplicationSession):
         else:
             message = 'Give me a moment. I\'m currently initializing.'
 
-        self.call('controller.speak', message)
+        self.speak(message)
 
     def _draw(self, svg):
-        self.call('controller.speak', 'Executing draw.')
+        self.speak('Executing draw.')
 
         landscape = (11.0 * 96, 8.5 * 96)
         portrait = (landscape[1], landscape[0])
@@ -263,12 +267,12 @@ class Cerebral(ApplicationSession):
         index = Numeric.to_int(index)
 
         if index is None:
-            return self.call('controller.speak', 'I don\'t recognize that index.')
+            return self.speak('I don\'t recognize that index.')
 
         url = self.image.get_all_url(q, index)
 
         if url is None:
-            return self.call('controller.speak', 'I am unable to find an image with those specifications.')
+            return self.speak('I am unable to find an image with those specifications.')
 
         logger.info('Image URL: {}.'.format(url))
 
@@ -278,27 +282,27 @@ class Cerebral(ApplicationSession):
     @wamp.register('arm.trace_image')
     async def trace_image(self, q, index=0):
         if not self.initialized:
-            return self.call('controller.speak', 'Please wait. System is not initialized.')
+            return self.speak('Please wait. System is not initialized.')
 
         if self.work_lock.acquire(blocking=False):
             try:
-                self.call('controller.speak', 'Fetching image from Pixabay.')
+                self.speak('Fetching image from Pixabay.')
                 await self.run(self._trace_image, q, index)
             finally:
                 self.work_lock.release()
         else:
-            self.call('controller.speak', 'I am currently busy.')
+            self.speak('I am currently busy.')
 
     def _draw_image(self, q, index):
         index = Numeric.to_int(index)
 
         if index is None:
-            return self.call('controller.speak', 'I don\'t recognize that index.')
+            return self.speak('I don\'t recognize that index.')
 
         url = self.image.get_svg_url(q, index)
 
         if url is None:
-            return self.call('controller.speak', 'I am unable to find an image with those specifications.')
+            return self.speak('I am unable to find an image with those specifications.')
 
         logger.info('Image URL: {}.'.format(url))
 
@@ -308,16 +312,16 @@ class Cerebral(ApplicationSession):
     @wamp.register('arm.draw_image')
     async def draw_image(self, q, index=0):
         if not self.initialized:
-            return self.call('controller.speak', 'Please wait. System is not initialized.')
+            return self.speak('Please wait. System is not initialized.')
 
         if self.work_lock.acquire(blocking=False):
             try:
-                self.call('controller.speak', 'Fetching image from Pixabay.')
+                self.speak('Fetching image from Pixabay.')
                 await self.run(self._draw_image, q, index)
             finally:
                 self.work_lock.release()
         else:
-            self.call('controller.speak', 'I am currently busy.')
+            self.speak('I am currently busy.')
 
     def _draw_weather(self):
         svg = self.weather.get_now()
@@ -326,72 +330,72 @@ class Cerebral(ApplicationSession):
     @wamp.register('arm.draw_weather')
     async def draw_weather(self):
         if not self.initialized:
-            return self.call('controller.speak', 'Please wait. System is not initialized.')
+            return self.speak('Please wait. System is not initialized.')
 
         if self.work_lock.acquire(blocking=False):
             try:
-                self.call('controller.speak', 'Drawing the weather.')
+                self.speak('Drawing the weather.')
                 await self.run(self._draw_weather)
             finally:
                 self.work_lock.release()
         else:
-            self.call('controller.speak', 'I am currently busy.')
+            self.speak('I am currently busy.')
 
     def _draw_forecast(self, value, units):
         value = Numeric.to_float(value)
 
         if value is None:
-            return self.call('controller.speak', 'I don\'t recognize that number.')
+            return self.speak('I don\'t recognize that number.')
 
         if units not in ('minute', 'minutes', 'hour', 'hours', 'day', 'days', 'week', 'weeks'):
-            return self.call('controller.speak', 'I don\'t recognize that unit.')
+            return self.speak('I don\'t recognize that unit.')
 
         try:
             svg = self.weather.get_forecast(value, units)
         except Exception:
-            return self.call('controller.speak', 'Forecast out of range.')
+            return self.speak('Forecast out of range.')
 
         self._draw(svg)
 
     @wamp.register('arm.draw_forecast')
     async def draw_forecast(self, value, units):
         if not self.initialized:
-            return self.call('controller.speak', 'Please wait. System is not initialized.')
+            return self.speak('Please wait. System is not initialized.')
 
         if self.work_lock.acquire(blocking=False):
             try:
-                self.call('controller.speak', 'Drawing the forecast.')
+                self.speak('Drawing the forecast.')
                 await self.run(self._draw_forecast, value, units)
             finally:
                 self.work_lock.release()
         else:
-            self.call('controller.speak', 'I am currently busy.')
+            self.speak('I am currently busy.')
 
-    def _zero(self):
+    def _home(self):
         self.agility.zero()
 
-    @wamp.register('arm.zero')
-    async def zero(self):
+    @wamp.register('arm.home')
+    async def home(self):
         if not self.initialized:
-            return self.call('controller.speak', 'Please wait. System is not initialized.')
+            return self.speak('Please wait. System is not initialized.')
 
         if self.work_lock.acquire(blocking=False):
             try:
-                self.call('controller.speak', 'Zeroing the arm.')
-                await self.run(self._zero)
+                self.speak('Homing the arm.')
+                await self.run(self._home)
             finally:
                 self.work_lock.release()
         else:
-            self.call('controller.speak', 'I am currently busy.')
+            self.speak('I am currently busy.')
 
     @wamp.register('arm.stop')
     async def stop(self):
         if not self.work_lock.acquire(blocking=False):
             self.event.set()
-            self.call('controller.speak', 'Stopping.')
+            self.speak('Stopping.')
         else:
             self.work_lock.release()
-            self.call('controller.speak', 'I cannot stop doing nothing.')
+            self.speak('I cannot stop doing nothing.')
 
     @wamp.register('arm.info')
     async def info(self):
@@ -402,29 +406,29 @@ class Cerebral(ApplicationSession):
                'Z-depth: {:.2f}.'.format(self.params['speed'], self.params['offset'],
                                      self.params['lift'], self.params['depth'])
 
-        self.call('controller.speak', text)
+        self.speak(text)
 
     def _set_parameter(self, param, value):
         value = Numeric.to_float(value)
 
         if value is None:
-            return self.call('controller.speak', 'I don\'t recognize that number.')
+            return self.speak('I don\'t recognize that number.')
 
         if param not in self.params:
-            return self.call('controller.speak', 'I don\'t recognize that parameter.')
+            return self.speak('I don\'t recognize that parameter.')
 
         self.params[param] = value
 
     @wamp.register('arm.set_parameter')
     async def set_parameter(self, param, value):
-        self.call('controller.speak', 'Setting parameter.')
+        self.speak('Setting parameter.')
         await self.run(self._set_parameter, param, value)
 
     def _relative_move(self, direction, delta):
         delta = Numeric.to_float(delta)
 
         if delta is None:
-            return self.call('controller.speak', 'I don\'t recognize that number.')
+            return self.speak('I don\'t recognize that number.')
 
         dx = 0
         dy = 0
@@ -443,23 +447,23 @@ class Cerebral(ApplicationSession):
         elif direction == 'down':
             dz -= delta
         else:
-            return self.call('controller.speak', 'I don\'t recognize that direction.')
+            return self.speak('I don\'t recognize that direction.')
 
         self.agility.move_relative((dx, dy, dz), pi, self.params['speed'])
 
     @wamp.register('arm.move_relative')
     async def relative_move(self, direction, delta):
         if not self.initialized:
-            return self.call('controller.speak', 'Please wait. System is not initialized.')
+            return self.speak('Please wait. System is not initialized.')
 
         if self.work_lock.acquire(blocking=False):
             try:
-                self.call('controller.speak', 'Moving.')
+                self.speak('Moving.')
                 await self.run(self._relative_move, direction, delta)
             finally:
                 self.work_lock.release()
         else:
-            self.call('controller.speak', 'I am currently busy.')
+            self.speak('I am currently busy.')
 
     def _absolute_move(self, x, y, z):
         x = Numeric.to_float(x)
@@ -467,23 +471,23 @@ class Cerebral(ApplicationSession):
         z = Numeric.to_float(z)
 
         if x is None or y is None or z is None:
-            return self.call('controller.speak', 'I don\'t recognize that coordinate.')
+            return self.speak('I don\'t recognize that coordinate.')
 
         self.agility.move_absolute((x, y, z), pi, self.params['speed'])
 
     @wamp.register('arm.move_absolute')
     async def absolute_move(self, x, y, z):
         if not self.initialized:
-            return self.call('controller.speak', 'Please wait. System is not initialized.')
+            return self.speak('Please wait. System is not initialized.')
 
         if self.work_lock.acquire(blocking=False):
             try:
-                self.call('controller.speak', 'Moving.')
+                self.speak('Moving.')
                 await self.run(self._absolute_move, x, y, z)
             finally:
                 self.work_lock.release()
         else:
-            self.call('controller.speak', 'I am currently busy.')
+            self.speak('I am currently busy.')
 
     def _save_point(self, name):
         self.points[name] = self.agility.get_position()
@@ -491,15 +495,15 @@ class Cerebral(ApplicationSession):
     @wamp.register('arm.save_point')
     async def save_point(self, name):
         if not self.initialized:
-            return self.call('controller.speak', 'Please wait. System is not initialized.')
+            return self.speak('Please wait. System is not initialized.')
 
-        self.call('controller.speak', 'Saving current location.')
+        self.speak('Saving current location.')
         await self.run(self._save_point, name)
 
     @wamp.register('arm.load_point')
     async def load_point(self, name):
         if name not in self.points:
-            return self.call('controller.speak', 'I am unable to find that point.')
+            return self.speak('I am unable to find that point.')
 
         await self._absolute_move(*self.points[name])
 
@@ -509,18 +513,18 @@ class Cerebral(ApplicationSession):
 
     @wamp.register('arm.calibrate')
     async def calibrate(self):
-        self.call('controller.speak', 'Calibrate depth using current position.')
+        self.speak('Calibrate depth using current position.')
         await self.run(self._calibrate)
 
     @wamp.register('arm.get_position')
     async def get_position(self):
         position = await self.run(self.agility.get_position)
-        self.call('controller.speak', 'The current position is {:.2f}, {:.2f}, {:.2f}.'.format(*position))
+        self.speak('The current position is {:.2f}, {:.2f}, {:.2f}.'.format(*position))
 
     @wamp.register('arm.chat')
     async def chat(self, input):
         response = await self.run(self.chatbot.ask, input)
-        self.call('controller.speak', response)
+        self.speak(response)
 
 
 if __name__ == '__main__':

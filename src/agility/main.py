@@ -519,7 +519,7 @@ class Agility:
         """
 
         while not self.is_at_target(servos):
-            time.sleep(0.001)
+            time.sleep(0.005)
 
     def is_moving(self):
         return self.maestro.get_moving_state()
