@@ -228,6 +228,10 @@ class Cerebral(ApplicationSession):
         logger.info('Speaking "{}"'.format(message))
         self.call('controller.speak', message)
 
+    def speak_threadsafe(self, message):
+        logger.info('Speaking "{}"'.format(message))
+        self.loop.call_soon_threadsafe(self.call, 'controller.speak', message)
+
     def watch_logging(self):
         while True:
             message = logging_queue.get()
@@ -247,7 +251,7 @@ class Cerebral(ApplicationSession):
         self.speak(message)
 
     def _draw(self, svg):
-        self.speak('Executing draw.')
+        self.speak_threadsafe('Executing draw.')
 
         landscape = (11.0 * 96, 8.5 * 96)
         portrait = (landscape[1], landscape[0])
@@ -269,12 +273,12 @@ class Cerebral(ApplicationSession):
         index = Numeric.to_int(index)
 
         if index is None:
-            return self.speak('I don\'t recognize that index.')
+            return self.speak_threadsafe('I don\'t recognize that index.')
 
         url = self.image.get_all_url(q, index)
 
         if url is None:
-            return self.speak('I am unable to find an image with those specifications.')
+            return self.speak_threadsafe('I am unable to find an image with those specifications.')
 
         logger.info('Image URL: {}.'.format(url))
 
@@ -299,12 +303,12 @@ class Cerebral(ApplicationSession):
         index = Numeric.to_int(index)
 
         if index is None:
-            return self.speak('I don\'t recognize that index.')
+            return self.speak_threadsafe('I don\'t recognize that index.')
 
         url = self.image.get_svg_url(q, index)
 
         if url is None:
-            return self.speak('I am unable to find an image with those specifications.')
+            return self.speak_threadsafe('I am unable to find an image with those specifications.')
 
         logger.info('Image URL: {}.'.format(url))
 
@@ -347,10 +351,10 @@ class Cerebral(ApplicationSession):
         value = Numeric.to_float(value)
 
         if value is None:
-            return self.speak('I don\'t recognize that number.')
+            return self.speak_threadsafe('I don\'t recognize that number.')
 
         if units not in ('minute', 'minutes', 'hour', 'hours', 'day', 'days', 'week', 'weeks'):
-            return self.speak('I don\'t recognize that unit.')
+            return self.speak_threadsafe('I don\'t recognize that unit.')
 
         try:
             svg = self.weather.get_forecast(value, units)
@@ -414,10 +418,10 @@ class Cerebral(ApplicationSession):
         value = Numeric.to_float(value)
 
         if value is None:
-            return self.speak('I don\'t recognize that number.')
+            return self.speak_threadsafe('I don\'t recognize that number.')
 
         if param not in self.params:
-            return self.speak('I don\'t recognize that parameter.')
+            return self.speak_threadsafe('I don\'t recognize that parameter.')
 
         self.params[param] = value
 
@@ -430,7 +434,7 @@ class Cerebral(ApplicationSession):
         delta = Numeric.to_float(delta)
 
         if delta is None:
-            return self.speak('I don\'t recognize that number.')
+            return self.speak_threadsafe('I don\'t recognize that number.')
 
         dx = 0
         dy = 0
@@ -449,7 +453,7 @@ class Cerebral(ApplicationSession):
         elif direction == 'down':
             dz -= delta
         else:
-            return self.speak('I don\'t recognize that direction.')
+            return self.speak_threadsafe('I don\'t recognize that direction.')
 
         self.agility.move_relative((dx, dy, dz), pi, self.params['speed'])
 
@@ -473,7 +477,7 @@ class Cerebral(ApplicationSession):
         z = Numeric.to_float(z)
 
         if x is None or y is None or z is None:
-            return self.speak('I don\'t recognize that coordinate.')
+            return self.speak_threadsafe('I don\'t recognize that coordinate.')
 
         self.agility.move_absolute((x, y, z), pi, self.params['speed'])
 
