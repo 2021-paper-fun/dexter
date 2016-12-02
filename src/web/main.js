@@ -165,12 +165,14 @@ control.call = function (f, payload, say_success, say_error) {
 control.activate = function () {
     annyang.removeCommands();
     annyang.addCommands(active_commands);
+    echo('Voice control activated.');
     voice.speak('Hello. I am alive.');
 };
 
 control.deactivate = function () {
     annyang.removeCommands();
     annyang.addCommands(inactive_commands);
+    echo('Voice control deactivated.');
     voice.speak('Going to sleep.')
 };
 
