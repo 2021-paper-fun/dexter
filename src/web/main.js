@@ -210,17 +210,17 @@ var active_commands = {
     '(dexter) draw the weather in :value :units': function (value, units) {
         control.call('draw_forecast', [value, units]);
     },
-    '(dexter) draw *q': function (q) {
-        control.call('draw_image', q);
-    },
     '(dexter) draw index :i query *q': function (i, q) {
         control.call('draw_image', [q, i]);
     },
-    '(dexter) trace *q': function (q) {
-        control.call('trace_image', q);
+    '(dexter) draw *q': function (q) {
+        control.call('draw_image', q);
     },
     '(dexter) trace index :i query *q': function (i, q) {
-        control.call('trac_image', [i, q]);
+        control.call('trace_image', [i, q]);
+    },
+    '(dexter) trace *q': function (q) {
+        control.call('trace_image', q);
     },
     '(dexter) move :direction :float': function (direction, float) {
         control.call('move_relative', [direction, float]);
@@ -237,7 +237,7 @@ var active_commands = {
     '(dexter) set :parameter :float': function (parameter, float) {
         control.call('set_parameter', [parameter, float]);
     },
-    '(dexter) *input': function (input) {
+    'dexter *input': function (input) {
         control.call('chat', input);
     }
 };

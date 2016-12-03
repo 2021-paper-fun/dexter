@@ -32,7 +32,7 @@ class Numeric:
     @staticmethod
     def to_int(num):
         try:
-            return int(num)
+            return int(float(num))
         except ValueError:
             return None
 
