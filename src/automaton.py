@@ -1,15 +1,14 @@
 import asyncio
-import ssl
-import threading
-import os
-from math import pi
-import pyowm
-from functools import partial
-from io import BytesIO
 from cleverbot import Cleverbot
 from datetime import datetime, timedelta
-
+from functools import partial
+from io import BytesIO
+from math import pi
+import os
+import pyowm
 import requests
+import ssl
+import threading
 
 from util import logger, logging_queue
 from drawing import Drawing
@@ -179,7 +178,6 @@ class Cerebral(ApplicationSession):
 
         self.initialized = False
         self.work_lock = threading.Lock()
-        self.wamp_lock = threading.Lock()
         self.event = threading.Event()
 
         self.points = {}
