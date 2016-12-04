@@ -1,6 +1,11 @@
 # 6.A01
 Robotic arm project for 6.A01 Fall 2016.
 
+### Dexter
+This is Dexter. All parts can be made using laser-cut acrylic or a 3D printer. The CAD package is located in [docs/cad.7z](docs/cad.7z). It must be opened using Autodesk Inventor 2017 or higher. 
+
+![render](docs/render.png)
+
 ### Commands
 The robot responds to the following voice commands. Commands are listed in order of priority.
 
