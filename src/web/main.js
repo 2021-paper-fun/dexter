@@ -241,14 +241,17 @@ var active_commands = {
     '(dexter) move :direction :float': function (direction, float) {
         control.call('move_relative', [direction, float]);
     },
+    '(dexter) move (to) :x, :y, :z, :phi': function (x, y, z, phi) {
+        control.call('move_absolute', [x, y, z, phi]);
+    },
     '(dexter) move (to) :x, :y, :z': function (x, y, z) {
         control.call('move_absolute', [x, y, z]);
     },
-    '(dexter) load point :name': function (name) {
-        control.call('load_point', name);
+    '(dexter) load constraint :name': function (name) {
+        control.call('load_constraint', name);
     },
-    '(dexter) save point as :name': function (name) {
-        control.call('save_point', name);
+    '(dexter) save constraint as :name': function (name) {
+        control.call('save_constraint', name);
     },
     '(dexter) set :parameter :float': function (parameter, float) {
         control.call('set_parameter', [parameter, float]);

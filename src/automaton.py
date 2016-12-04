@@ -3,7 +3,7 @@ from cleverbot import Cleverbot
 from datetime import datetime, timedelta
 from functools import partial
 from io import BytesIO
-from math import pi
+import math
 import os
 import pyowm
 import requests
@@ -180,7 +180,7 @@ class Cerebral(ApplicationSession):
         self.work_lock = threading.Lock()
         self.event = threading.Event()
 
-        self.points = {}
+        self.constraints = {}
         self.params = {
             'lift': 4.0,
             'speed': 10.0,
@@ -471,7 +471,7 @@ class Cerebral(ApplicationSession):
         else:
             return self.speak('I don\'t recognize that direction.')
 
-        self.agility.move_relative((dx, dy, dz), pi, self.params['speed'])
+        self.agility.move_relative((dx, dy, dz), math.pi, self.params['speed'])
 
     @wamp.register('arm.move_relative')
     async def relative_move(self, direction, delta):
@@ -487,47 +487,52 @@ class Cerebral(ApplicationSession):
         else:
             self.speak('I am currently busy.')
 
-    def _absolute_move(self, x, y, z):
+    def _absolute_move(self, x, y, z, phi):
         x = Numeric.to_float(x)
         y = Numeric.to_float(y)
         z = Numeric.to_float(z)
 
-        if x is None or y is None or z is None:
-            return self.speak('I don\'t recognize that coordinate.')
+        try:
+            phi = math.radians(Numeric.to_float(phi))
+        except TypeError:
+            phi = None
 
-        self.agility.move_absolute((x, y, z), pi, self.params['speed'])
+        if x is None or y is None or z is None or phi is None:
+            return self.speak('I don\'t recognize that constraint.')
+
+        self.agility.move_absolute((x, y, z), phi, self.params['speed'])
 
     @wamp.register('arm.move_absolute')
-    async def absolute_move(self, x, y, z):
+    async def absolute_move(self, x, y, z, phi=math.pi):
         if not self.initialized:
             return self.speak('Please wait. System is not initialized.')
 
         if self.work_lock.acquire(blocking=False):
             try:
                 self.speak('Moving.')
-                await self.run(self._absolute_move, x, y, z)
+                await self.run(self._absolute_move, x, y, z, phi)
             finally:
                 self.work_lock.release()
         else:
             self.speak('I am currently busy.')
 
-    def _save_point(self, name):
-        self.points[name] = self.agility.get_position()
+    def _save_constraint(self, name):
+        self.constraints[name] = self.agility.get_position()
 
-    @wamp.register('arm.save_point')
-    async def save_point(self, name):
+    @wamp.register('arm.save_constraint')
+    async def save_constraint(self, name):
         if not self.initialized:
             return self.speak('Please wait. System is not initialized.')
 
-        self.speak('Saving current location.')
-        await self.run(self._save_point, name)
+        self.speak('Saving current constraint.')
+        await self.run(self._save_constraint, name)
 
-    @wamp.register('arm.load_point')
-    async def load_point(self, name):
-        if name not in self.points:
-            return self.speak('I am unable to find that point.')
+    @wamp.register('arm.load_constraint')
+    async def load_constraint(self, name):
+        if name not in self.constraints:
+            return self.speak('I am unable to find that constraint.')
 
-        await self._absolute_move(*self.points[name])
+        await self._absolute_move(*self.constraints[name])
 
     def _calibrate(self):
         pos = self.agility.get_position()
