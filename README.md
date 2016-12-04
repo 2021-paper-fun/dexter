@@ -6,6 +6,16 @@ This is Dexter. All parts can be made using laser-cut acrylic or a 3D printer. T
 
 ![render](docs/render.png)
 
+### Running
+
+It's relatively easy to begin using Dexter. Follow the steps below to get started.
+
+1. (optional) Generate new server certificates and change passwords for all devices.
+2. Start Crossbar from inside of `src/crossbar`. This can be on any device that allows incoming SSL connection on port 443.
+3. Navigate to the the IP of the device running Crossbar. Use HTTPS and skip any security notifications you may receive.
+4. Edit the IP in `src/config/main.py` to match that of the machine running Crossbar.
+5. Run `automaton.py` ensuring that `src` is in `PYTHONPATH`.
+
 ### Commands
 The robot responds to the following voice commands. Commands are listed in order of priority.
 
