@@ -275,6 +275,10 @@ class Cerebral(ApplicationSession):
 
         angles, dts = self.agility.draw(drawing, self.params['speed'], self.params['offset'],
                                         self.params['depth'], self.params['lift'])
+
+        eta = dts.sum() / 1000 * 1.1
+        self.speak('Estimated completion in {:d} seconds.'.format(eta))
+
         self.event.clear()
         completed = self.agility.execute(angles, dts, event=self.event)
 
