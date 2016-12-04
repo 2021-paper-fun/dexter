@@ -9,8 +9,8 @@ agility.zero()
 landscape = (11.0 * 96, 8.5 * 96)
 portrait = (landscape[1], landscape[0])
 
-drawing = Drawing('save.png', portrait, center=True, resize=True, dx=20)
+drawing = Drawing('../svg/weather/23.svg', portrait, center=True, resize=True, dx=5)
 
 if drawing.preview():
-    angles, dts = agility.draw(drawing, 10, 6, -7.4, 4)
+    angles, dts = agility.draw(drawing, 15, 6, -7.4, 4)
     agility.execute(angles, dts)

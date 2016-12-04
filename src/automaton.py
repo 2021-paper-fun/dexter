@@ -183,9 +183,9 @@ class Cerebral(ApplicationSession):
         self.constraints = {}
         self.params = {
             'lift': 4.0,
-            'speed': 10.0,
-            'offset': 6.0,
-            'depth': -7.6
+            'speed': 15.0,
+            'offset': 7.0,
+            'depth': -7.5
         }
 
         super().__init__(*args, **kwargs)
@@ -262,6 +262,13 @@ class Cerebral(ApplicationSession):
 
         self.speak(message)
 
+    @wamp.register('arm.introduce')
+    async def introduce(self):
+        message = 'Hello world! ' \
+                  'I am Dexter, a 4-DOF robotic arm capable of performing a variety of drawing-related tasks.'
+
+        self.speak(message)
+
     def _draw(self, svg):
         self.speak('Executing draw.')
 
@@ -277,7 +284,7 @@ class Cerebral(ApplicationSession):
                                         self.params['depth'], self.params['lift'])
 
         eta = dts.sum() / 1000 * 1.1
-        self.speak('Estimated completion in {:d} seconds.'.format(eta))
+        self.speak('Estimated completion in {:d} seconds.'.format(int(round(eta))))
 
         self.event.clear()
         completed = self.agility.execute(angles, dts, event=self.event)

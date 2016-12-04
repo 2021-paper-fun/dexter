@@ -208,6 +208,9 @@ var active_commands = {
     '(dexter) home': function () {
         control.call('home');
     },
+    '(dexter) introduce': function () {
+        control.call('introduce');
+    },
     '(dexter) info': function () {
         control.call('info');
     },
@@ -226,13 +229,13 @@ var active_commands = {
     '(dexter) draw the weather in :value :units': function (value, units) {
         control.call('draw_forecast', [value, units]);
     },
-    '(dexter) draw index :i query *q': function (i, q) {
+    '(dexter) draw index :i *q': function (i, q) {
         control.call('draw_image', [q, i]);
     },
     '(dexter) draw *q': function (q) {
         control.call('draw_image', q);
     },
-    '(dexter) trace index :i query *q': function (i, q) {
+    '(dexter) trace index :i *q': function (i, q) {
         control.call('trace_image', [i, q]);
     },
     '(dexter) trace *q': function (q) {

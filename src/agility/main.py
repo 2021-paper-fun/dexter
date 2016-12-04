@@ -307,8 +307,15 @@ class Agility:
         :param lift: The height to lift
         """
 
+        assert x >= 0
         assert v > 0
         assert lift > 0
+
+        # Define constants.
+        dz = -0.5
+        min_phi = 3 * math.pi / 4
+        max_phi = 5 * math.pi / 4
+        slow_dt = 500
 
         # Pixel to cm conversion factor.
         px_cm = 2.54 / 96
@@ -329,13 +336,17 @@ class Agility:
         points = np.empty((a.shape[0], 3))
         points[:, 0] = np.imag(a) * px_cm
         points[:, 1] = np.real(a) * px_cm * -1
-        points[:, 2] = z
+
+        # Push down more as distance from origin increases.
+        r = np.linalg.norm(points[:, :2], axis=1) / self.arm.length
+        points[:, 2] = z + dz * r
 
         # Move up x and left by viewport[0] / 2.
         points += (x, width, 0)
 
         # Replace all nans with a lift and insert a move right after.
         loc = np.where(~np.isfinite(points[:, 0]))[0]
+        print(loc)
         points[loc] = points[loc - 1] + (0, 0, lift)
         points = np.insert(points, loc + 1, points[(loc + 1) % len(points)] + (0, 0, lift), axis=0)
 
@@ -351,12 +362,16 @@ class Agility:
         dts = np.hstack((2000, dts))
 
         # Slow move up and down.
-        loc2 = np.concatenate((loc, loc + 2))
-        dts[loc2] = 2000
+        loc2 = loc[:-1] + 1 + np.arange(0, len(loc) - 1)
+        loc2 = np.concatenate((loc2, loc2 + 2))
+        dts[loc2] = slow_dt
+
+        # Slow move to end.
+        dts[-1] = slow_dt
 
         # Compute phi.
-        r = np.linalg.norm(points, axis=1) / self.arm.length
-        phi = 5 * math.pi / 4 - math.pi / 2 * r
+        r = np.linalg.norm(points[:, :2], axis=1) / self.arm.length
+        phi = max_phi - (max_phi - min_phi) * r
         constraints = np.empty((points.shape[0], 4))
         constraints[:, :3] = points
         constraints[:, 3] = phi
