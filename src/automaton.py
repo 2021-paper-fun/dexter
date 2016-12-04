@@ -185,7 +185,7 @@ class Cerebral(ApplicationSession):
             'lift': 4.0,
             'speed': 10.0,
             'offset': 6.0,
-            'depth': -7.5
+            'depth': -7.6
         }
 
         super().__init__(*args, **kwargs)

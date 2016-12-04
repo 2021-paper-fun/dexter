@@ -355,12 +355,11 @@ class Agility:
         dts[loc2] = 2000
 
         # Compute phi.
-        # r = np.linalg.norm(points, axis=1) / self.arm.length
-        # phi = 5 * math.pi / 4 - math.pi / 2 * r
+        r = np.linalg.norm(points, axis=1) / self.arm.length
+        phi = 5 * math.pi / 4 - math.pi / 2 * r
         constraints = np.empty((points.shape[0], 4))
         constraints[:, :3] = points
-        # constraints[:, 3] = phi
-        constraints[:, 3] = math.pi
+        constraints[:, 3] = phi
 
         logger.info('Completed path generation.')
 
