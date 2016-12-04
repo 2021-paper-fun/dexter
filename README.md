@@ -15,7 +15,7 @@ dexter | Wake up the robot. No other commands will work until the robot is woken
 (dexter) sleep | Put the robot to sleep. No commands will work until the robot is woken again.
 (dexter) stop | Stop the current drawing.
 (dexter) draw the weather | Draw today's weather using data from Open Weather Map.
-(dexter) draw the weather in `:value` `:units` | Draw the forecast using data from Open Weather Map. `:value` can be any float. `:units` can be one of second(s), minute(s), hour(s), day(s), or week(s).
+(dexter) draw the weather in `:value` `:units` | Draw the forecast using data from Open Weather Map. `:value` can be any float. `:units` can be one of minute(s), hour(s), day(s), or week(s).
 (dexter) draw index `:i` query `*q` | Similar to draw, but allows an offset index. `:i` can be any integer. `*q` can be any text.
 (dexter) draw `*q` | Queries Pixabay for a desired SVG. `*q` can be any text.
 (dexter) trace index `:i` query `*q` | Similar to trace, but allows an offset index. `:i` can be any integer. `*q` can be any text.
