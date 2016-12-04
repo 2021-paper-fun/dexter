@@ -1,4 +1,4 @@
 #!/bin/bash
 
-cd /mnt/c/Users/lujin/Documents/GitHub/6.A01/src/crossbar
+cd /mnt/c/Users/lujin/Documents/GitHub/Dexter/src/crossbar
 /opt/crossbar/bin/crossbar start
