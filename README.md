@@ -40,7 +40,7 @@ dexter | Wake up the robot. No other commands will work until the robot is woken
 (dexter) trace index `:i` query `*q` | Similar to trace, but allows an offset index. `:i` can be any integer. `*q` can be any text.
 (dexter) trace `*q` | Queries Pixabay for a desired image. Use Potrace to convert to SVG. `*q` can be any text.
 (dexter) move `:direction` `:float` | Move the arm a certain amount in a particular direction. `:direction` can be one of up, down, left, right, forward, or backward. `:float` can be any float.
-(dexter) move (to) `:x`, `:y`, `:z`, `:phi` | Move to a coordinate in space. `:x`, `:y`, `:z`, `:phi` can be any float.
+(dexter) move (to) `:x`, `:y`, `:z`, `:phi` | Move to a constraint in space. `:x`, `:y`, `:z`, `:phi` can be any float.
 (dexter) move (to) `:x`, `:y`, `:z` | Move to a coordinate in space. `:x`, `:y`, `:z` can be any float.
 (dexter) load point `:name` | Load a previously saved position. `:name` can be any text.
 (dexter) save point as `:name` | Save the arm's current position under an alias. `:name` can be any text.
