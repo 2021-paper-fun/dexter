@@ -556,8 +556,8 @@ class Cerebral(ApplicationSession):
         self.speak('The current position is {:.2f}, {:.2f}, {:.2f}.'.format(*position))
 
     @wamp.register('arm.chat')
-    async def chat(self, input):
-        response = await self.run(self.chatbot.ask, input)
+    async def chat(self, query):
+        response = await self.run(self.chatbot.ask, query)
         self.speak(response)
 
 
