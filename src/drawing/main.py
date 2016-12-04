@@ -766,8 +766,8 @@ class Drawing:
         self.file = file
         self.viewport = viewport
 
-        self.dx = kwargs.get('dx', 5)
-        self.min_points = kwargs.get('min_points', 5)
+        self.dx = kwargs.get('dx', 10)
+        self.min_points = kwargs.get('min_points', 2)
 
         resize = kwargs.get('resize', False)
         center = kwargs.get('center', True)

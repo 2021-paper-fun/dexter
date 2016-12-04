@@ -1,3 +1,7 @@
+// Global state variables.
+var useRecognition = false;
+
+
 // Global terminal functions.
 var term = $('body').terminal(
     function(command, term) {
@@ -38,6 +42,14 @@ function echo2(dt, text) {
 // System messages.
 echo('Starting system.');
 echo('Public IP is ' + ip + '.');
+
+
+// Test browser.
+if (window.DeviceMotionEvent && window.speechSynthesis && annyang) {
+    echo('Tests passed. Your browser is supported.')
+} else {
+    echo('Tests failed. Your browser is not supported.')
+}
 
 
 // WAMP.
@@ -117,10 +129,14 @@ voice.speak = function (text) {
     msg.text = text;
     msg.voice = voice.v;
     msg.onend = function (e) {
-        annyang.resume();
+        if (useRecognition && !annyang.isListening()) {
+            annyang.resume();
+        }
     };
     msg.onstart = function (e) {
-        annyang.pause();
+        if (useRecognition && annyang.isListening()) {
+            annyang.pause();
+        }
     };
 
     synth.speak(msg);
@@ -132,7 +148,7 @@ ws.register('controller.speak', {
         echo('Successfully registered speaking function.');
     },
     onError: function (err, details) {
-        echo('Unable ot register speaking function: ' + err + '.');
+        echo('Unable to register speaking function: ' + err + '.');
     }
 });
 
@@ -237,7 +253,7 @@ var active_commands = {
     '(dexter) set :parameter :float': function (parameter, float) {
         control.call('set_parameter', [parameter, float]);
     },
-    'dexter *input': function (input) {
+    '(dexter) *input': function (input) {
         control.call('chat', input);
     }
 };
@@ -250,6 +266,23 @@ annyang.addCallback('start', function () {
 });
 
 annyang.debug();
-annyang.start();
+// annyang.start();
 
 
+// Shake event.
+var shakeEvent = new Shake({
+    threshold: 5, // optional shake strength threshold
+    timeout: 1000 // optional, determines the frequency of event generation
+});
+
+shakeEvent.start();
+
+window.addEventListener('shake', function () {
+    if (useRecognition) {
+        useRecognition = false;
+        annyang.abort();
+    } else {
+        useRecognition = true;
+        annyang.start();
+    }
+}, false);

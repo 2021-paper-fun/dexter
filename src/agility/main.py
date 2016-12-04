@@ -339,18 +339,28 @@ class Agility:
         points[loc] = points[loc - 1] + (0, 0, lift)
         points = np.insert(points, loc + 1, points[(loc + 1) % len(points)] + (0, 0, lift), axis=0)
 
+        # Insert last point at start.
+        points = np.insert(points, 0, points[-1], axis=0)
+
         # Compute velocity in ms.
         diff = np.diff(points, axis=0)
         distances = np.linalg.norm(diff, axis=1)
         dts = distances / v * 1000
+
+        # Slow move from current position to starting position.
         dts = np.hstack((2000, dts))
 
+        # Slow move up and down.
+        loc2 = np.concatenate((loc, loc + 2))
+        dts[loc2] = 2000
+
         # Compute phi.
-        r = np.linalg.norm(points, axis=1) / self.arm.length
-        phi = 5 * math.pi / 4 - math.pi / 2 * r
+        # r = np.linalg.norm(points, axis=1) / self.arm.length
+        # phi = 5 * math.pi / 4 - math.pi / 2 * r
         constraints = np.empty((points.shape[0], 4))
         constraints[:, :3] = points
-        constraints[:, 3] = phi
+        # constraints[:, 3] = phi
+        constraints[:, 3] = math.pi
 
         logger.info('Completed path generation.')
 

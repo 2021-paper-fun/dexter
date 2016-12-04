@@ -5,7 +5,6 @@ from util import logger
 
 agility = Agility(Android.arm)
 agility.zero()
-print(agility.get_position())
 
 landscape = (11.0 * 96, 8.5 * 96)
 portrait = (landscape[1], landscape[0])
