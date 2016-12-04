@@ -1,5 +1,9 @@
 # 6.A01
-Robotic arm project for 6.A01 Fall 2016.
+This is my project for MIT's 6.A01 Fall 2016. 
+
+Dexter is a 4-DOF robotic arm capable of performing a variety of drawing-related tasks. At the time of writing, Dexter can fetch the weather, draw images from the Internet, and chat with you! The entire system can be operated using voice control using any modern browser supporting the Web Speech API. 
+
+The back end is written in Python 3 and uses asyncio along with the WAMP protocol to communicate with the front end. Notable features include real-time inverse kinematics, asynchronous communcation, automated path optimization, and accurate servo synchronization. 
 
 ### Dexter
 This is Dexter. All parts can be made using laser-cut acrylic or a 3D printer. The CAD package is located in [docs/cad.7z](docs/cad.7z). It must be opened using Autodesk Inventor 2017 or higher. 
