@@ -271,18 +271,26 @@ annyang.debug();
 
 // Shake event.
 var shakeEvent = new Shake({
-    threshold: 5, // optional shake strength threshold
-    timeout: 1000 // optional, determines the frequency of event generation
+    threshold: 5,
+    timeout: 1000
 });
 
 shakeEvent.start();
 
+function startListen () {
+    useRecognition = false;
+    annyang.abort();
+}
+
+function stopListen () {
+    useRecognition = true;
+    annyang.start();
+}
+
 window.addEventListener('shake', function () {
     if (useRecognition) {
-        useRecognition = false;
-        annyang.abort();
+        startListen();
     } else {
-        useRecognition = true;
-        annyang.start();
+        stopListen();
     }
 }, false);
