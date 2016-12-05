@@ -241,6 +241,9 @@ var active_commands = {
     '(dexter) trace *q': function (q) {
         control.call('trace_image', q);
     },
+    '(dexter) stocks :name :value :units': function (name, value, units) {
+        control.call('get_stocks', [name, value, units]);
+    },
     '(dexter) move :direction :float': function (direction, float) {
         control.call('move_relative', [direction, float]);
     },

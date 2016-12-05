@@ -761,6 +761,13 @@ class SVGRectangle(SVGPath):
         return '<Rectangle ' + self.id + '>'
 
 
+class ClipPath(Transformable):
+    tag = 'clipPath'
+
+    def __init__(self, elt=None):
+        super().__init__(elt)
+
+
 class Drawing:
     def __init__(self, file, viewport, **kwargs):
         self.file = file

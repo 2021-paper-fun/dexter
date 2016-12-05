@@ -346,7 +346,6 @@ class Agility:
 
         # Replace all nans with a lift and insert a move right after.
         loc = np.where(~np.isfinite(points[:, 0]))[0]
-        print(loc)
         points[loc] = points[loc - 1] + (0, 0, lift)
         points = np.insert(points, loc + 1, points[(loc + 1) % len(points)] + (0, 0, lift), axis=0)
 

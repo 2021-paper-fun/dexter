@@ -4,11 +4,14 @@ from datetime import datetime, timedelta
 from functools import partial
 from io import BytesIO
 import math
+import matplotlib.pyplot as plt
 import os
 import pyowm
 import requests
 import ssl
 import threading
+import xml.etree.ElementTree as etree
+from yahoo_finance import Share, YQLResponseMalformedError
 
 from util import logger, logging_queue
 from drawing import Drawing
@@ -103,7 +106,11 @@ class Image:
 
     def get_image(self, url):
         r = requests.get(url)
-        return BytesIO(r.content)
+
+        image = BytesIO(r.content)
+        image.seek(0)
+
+        return image
 
 
 class Weather:
@@ -185,7 +192,7 @@ class Cerebral(ApplicationSession):
             'lift': 4.0,
             'speed': 15.0,
             'offset': 7.0,
-            'depth': -7.5
+            'depth': -7.6
         }
 
         super().__init__(*args, **kwargs)
@@ -268,6 +275,72 @@ class Cerebral(ApplicationSession):
                   'I am Dexter, a 4-DOF robotic arm capable of performing a variety of drawing-related tasks.'
 
         self.speak(message)
+
+    def _get_stocks(self, name, value, units):
+        value = Numeric.to_float(value)
+
+        if value is None:
+            return self.speak('I don\'t recognize that number.')
+
+        if units not in ('day', 'days', 'week', 'weeks'):
+            return self.speak('I don\'t recognize that unit.')
+
+        end = datetime.now()
+        start = datetime.now()
+
+        if units == 'days' or units == 'day':
+            start -= timedelta(days=value)
+        elif units == 'weeks' or units == 'week':
+            start -= timedelta(weeks=value)
+
+        stock = Share(name)
+        full_name = stock.get_name()
+
+        if full_name is None:
+            return self.speak('I cannot find stocks for that company.')
+        else:
+            self.speak('Fetching stock data for {}.'.format(full_name))
+            
+        try:
+            data = stock.get_historical(start.strftime('%Y-%m-%d'), end.strftime('%Y-%m-%d'))
+        except (ValueError, YQLResponseMalformedError):
+            return self.speak('Error while fetching data.')
+
+        points = [point['Close'] for point in data]
+        image = BytesIO()
+
+        plt.plot(points)
+        plt.axis('off')
+        plt.savefig(image, bbox_inches='tight', format='svg')
+
+        image.seek(0)
+        tree = etree.parse(image)
+        root = tree.getroot()
+
+        for group in root.iter('{http://www.w3.org/2000/svg}g'):
+            if group.attrib['id'] == 'patch_1':
+                parent = root.findall('.//{http://www.w3.org/2000/svg}g[@id="patch_1"]...')[0]
+                parent.remove(group)
+
+        image = BytesIO()
+        tree.write(image)
+        image.seek(0)
+
+        self._draw(image)
+
+    @wamp.register('arm.get_stocks')
+    async def get_stocks(self, name, value, units):
+        if not self.initialized:
+            return self.speak('Please wait. System is not initialized.')
+
+        if self.work_lock.acquire(blocking=False):
+            try:
+                self.speak('Querying Yahoo for stock data.')
+                await self.run(self._get_stocks, name, value, units)
+            finally:
+                self.work_lock.release()
+        else:
+            self.speak('I am currently busy.')
 
     def _draw(self, svg):
         self.speak('Executing draw.')
