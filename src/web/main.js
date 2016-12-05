@@ -208,7 +208,7 @@ var active_commands = {
     '(dexter) home': function () {
         control.call('home');
     },
-    '(dexter) introduce': function () {
+    '(dexter) introduce (yourself)': function () {
         control.call('introduce');
     },
     '(dexter) info': function () {
