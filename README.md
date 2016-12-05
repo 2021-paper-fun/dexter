@@ -52,7 +52,7 @@ dexter | Wake up the robot. No other commands will work until the robot is woken
 The following software are required to run this project.
 
 - Python 3.5 or higher
-- Python packages: numpy, scipy, matplotlib, pillow (PIL), autobahn, requests, cleverbot, pyowm, cssutils, yahoo-finance
+- Python packages: numpy, scipy, matplotlib, pillow (PIL), autobahn, requests, cleverbot, pyowm, yahoo-finance
 - Crossbar.io (or equivalent router supporting WAMP 2)
 - A browser that supports the Web Speech API (Chrome 33+ or Firefox 49+)
 
