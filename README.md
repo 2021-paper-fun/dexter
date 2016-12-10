@@ -7,7 +7,7 @@ Dexter is a 4-DOF robotic arm capable of performing a variety of drawing-related
 The back end is written in Python 3 and uses asyncio along with the WAMP protocol to communicate with the front end. Notable features include real-time inverse kinematics, asynchronous communcation, automated path optimization, and accurate servo synchronization. 
 
 ### Arm
-This is Dexter. All parts can be made using laser-cut acrylic or a 3D printer. The CAD package is located in [docs/cad.7z](docs/cad.7z). It must be opened using Autodesk Inventor 2017 or higher. 
+This is Dexter. All parts can be made using laser-cut acrylic and a 3D printer. The CAD package is located in [docs/cad.7z](docs/cad.7z). It must be opened using Autodesk Inventor 2017 or higher. 
 
 ![render](docs/render.png)
 
